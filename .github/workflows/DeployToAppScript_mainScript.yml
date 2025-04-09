@@ -1,0 +1,35 @@
+# This workflow deploys the Apps Script project for script that fetches Jira data
+# clasp details https://developers.google.com/apps-script/guides/clasp
+name: Deploy to Apps Script - fetch Jira Data
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'main_roadmap/**'
+      
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Setup Node
+      uses: actions/setup-node@v3
+      with:
+        node-version: '22'
+
+    - name: Install clasp
+      run: npm install -g @google/clasp
+
+    - name: Set up clasp credentials
+      run: echo '${{ secrets.CLASP_CREDENTIALS }}' > ~/.clasprc.json
+
+    - name: Push to Apps Script
+      run: |
+        cd main_roadmap
+        clasp push
