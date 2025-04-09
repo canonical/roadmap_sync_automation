@@ -27,11 +27,6 @@ jobs:
     - name: Set up clasp credentials
       run: echo '${{ secrets.CLASP_CREDENTIALS }}' > ~/.clasprc.json
 
-    - name: Pull from Apps Script
-      run: |
-        cd raw_jira_data
-        clasp pull
-
     - name: Push to Apps Script
       run: |
         cd raw_jira_data
