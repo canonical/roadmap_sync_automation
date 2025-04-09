@@ -1,3 +1,5 @@
+# This workflow deploys the Apps Script project for script that fetches Jira data
+# clasp details https://developers.google.com/apps-script/guides/clasp
 name: Deploy to Apps Script - fetch Jira Data
 
 on:

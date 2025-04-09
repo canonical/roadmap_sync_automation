@@ -1,7 +1,7 @@
 //TODO: multi cycles
 //TODO: copy of the sheet for CEO
 
-const SHEETS = ["cloud"]; //sheet names that should be processed
+const SHEETS = ["cloud", "charming"]; //sheet names that should be processed
 const CURRENT_CYCLE = "25.04"; //current cycle
 const JIRA_DATA_SPREADSHEET_ID = "1aZrcP6XP1Lfheyj5Z8yP8HdOfgF0dLr3hHb6HWDhWQM"; //Spreadsheet ID with Jira data for roadmap
 const CYCLE_REGEX_PATTERN = /^\d{2}\.\d{2}$/; //regex pattern for cycles
@@ -43,58 +43,24 @@ function main() {
 
 function processSheet(sheet) {
   let cycles = findCyclesOnTheSheet(sheet); // get info about cycles numbers and their positions on the sheet
+  let ss = SpreadsheetApp.getActiveSpreadsheet()
 
   if (cycles.has(CURRENT_CYCLE)) {
 
-    //get first project column
-    let projectColumnIndex = 4;
-    let projectsStringCell = sheet.getRange(PROJECT_ROW_INDEX, projectColumnIndex);
-    let projectValue = projectsStringCell.getValue();
-
-    //create new temp sheet for data processing
-    let tempSheet = SpreadsheetApp.getActiveSpreadsheet().insertSheet(sheet.getName() + "_temp");
+    sheetName = sheet.getName();
+    //create a copy of the sheet
+    let tempSheet = sheet.copyTo(ss);
+    tempSheet.setName(sheetName + "_temp");
     tempSheet.hideSheet()
 
-    let currentColumnIndex = 1;
-    //run sheet processing and data fetching
-    while (projectValue) {
-      let projects = projectsStringCell.getValue().toString().split(";");
-
-      projects.forEach(projectKey => {
-        let projectFilter = parseProjectFilterValue(projectKey);
-
-        if (projectFilter) {
-          processProjectV2(projectFilter, tempSheet, 1, currentColumnIndex)
-        }
-        else
-          Logger.log(`Project filter ${projectKey} is invalid. Please check the format. It can be <project key>(<labels>)[<components>], <project key>[<components>](<labels>), <project key>(<labels>), <project key>[<components>] or just <project key>`)
-      })
-      currentColumnIndex += 3;
-      projectColumnIndex += 3;
-      projectsStringCell = sheet.getRange(PROJECT_ROW_INDEX, projectColumnIndex);
-      projectValue = projectsStringCell.getValue();
-    }
-
-    tempRange = tempSheet.getDataRange()
-
     let cycleRowIndex = cycles.get(CURRENT_CYCLE);
-    let currentRowIndex = cycleRowIndex + 1;
-    let nextprevCycles = getNextPrevKeys(cycles, CURRENT_CYCLE);
-    let lastCycleRow = nextprevCycles.next ? cycles.get(nextprevCycles.next) : sheet.getLastRow() + 2;
-
-    let projectsRange = sheet.getRange(currentRowIndex, 1, lastCycleRow - currentRowIndex, sheet.getLastColumn());
-    projectsRange.clear()
-    tempRange.setWrapStrategy(SpreadsheetApp.WrapStrategy.CLIP);
-
-    copyRangeWithFormatting(tempSheet, sheet, tempRange, currentRowIndex);
-
-
-    SpreadsheetApp.getActiveSpreadsheet().deleteSheet(tempSheet);
-
-    /*let cycleRowIndex = cycles.get(CURRENT_CYCLE);
     let nextprevCycles = getNextPrevKeys(cycles, CURRENT_CYCLE);
 
-    let lastCycleRow = nextprevCycles.next ? cycles.get(nextprevCycles.next) : sheet.getLastRow() + 2;
+    let lastCycleRow = nextprevCycles.next ? cycles.get(nextprevCycles.next) : tempSheet.getLastRow() + 2;
+
+    let projectColumnIndex = 4;
+    let projectsStringCell = tempSheet.getRange(PROJECT_ROW_INDEX, projectColumnIndex);
+    let projectValue = projectsStringCell.getValue();
 
 
     let currentRowIndex = cycleRowIndex + 1;
@@ -102,7 +68,7 @@ function processSheet(sheet) {
     while (projectValue) {
       let projects = projectsStringCell.getValue().toString().split(";");
 
-      let projectsRange = sheet.getRange(currentRowIndex, currentColumnIndex, lastCycleRow - currentRowIndex, 3);
+      let projectsRange = tempSheet.getRange(currentRowIndex, currentColumnIndex, lastCycleRow - currentRowIndex, 3);
       projectsRange.clear();
       projectsRange.setWrapStrategy(SpreadsheetApp.WrapStrategy.CLIP);
 
@@ -112,7 +78,7 @@ function processSheet(sheet) {
         let projectFilter = parseProjectFilterValue(projectKey);
 
         if (projectFilter) {
-          row_index = processProject(projectFilter, sheet, row_index, currentColumnIndex, lastCycleRow)
+          row_index = processProject(projectFilter, tempSheet, row_index, currentColumnIndex, lastCycleRow)
           if (row_index > lastCycleRow)
             lastCycleRow = row_index;
         }
@@ -124,7 +90,14 @@ function processSheet(sheet) {
       projectColumnIndex += 3;
       projectsStringCell = sheet.getRange(PROJECT_ROW_INDEX, projectColumnIndex);
       projectValue = projectsStringCell.getValue();
-    }*/
+    }
+
+    let position = getSheetPosition(sheetName);
+    ss.deleteSheet(sheet);
+    tempSheet.setName(sheetName);
+    tempSheet.showSheet();
+    moveSheetToPosition(sheetName, position)
+    //ss.setActiveSheet(tempSheet);
   }
   else {
     Logger.log(`Cycle ${CURRENT_CYCLE} not found on the roadmap.`)
@@ -221,90 +194,6 @@ function processProject(projectFilter, sheet, row_index, projectColumnIndex, las
     if (row_index >= lastCycleRow - 1) {
       sheet.insertRowAfter(row_index);
     }
-  }
-  return row_index;
-}
-
-function processProjectV2(projectFilter, sheet, row_index, projectColumnIndex) {
-
-  Logger.log(`Fetching data for project: ${projectFilter.projectKey}. Components: ${projectFilter.components} Labels: ${projectFilter.labels}`);
-
-  let projectData = getProjectIssuesInHierarchy(projectFilter);
-
-  for (let parent in projectData) {
-    let issue = projectData[parent]
-
-    if (parent != 'None') {
-      //Carry over
-      sheet.getRange(row_index, projectColumnIndex).setValue("")
-
-      //State
-      sheet.getRange(row_index, projectColumnIndex + 1).setValue("")
-
-      //Summary
-      let parentLinkURL = issue.parentLink;
-      const richText = SpreadsheetApp.newRichTextValue()
-        .setText(issue.summary + " (" + issue.key + ")")
-        .setLinkUrl(issue.summary.length + 2, issue.summary.length + 2 + issue.key.length, parentLinkURL)
-        .build();
-
-      sheet.getRange(row_index, projectColumnIndex + 2).setRichTextValue(richText);
-      sheet.getRange(row_index, projectColumnIndex + 2).setFontWeight("bold");
-      row_index++;
-    }
-
-    let childrens = issue.children
-
-    for (let childIndex in childrens) {
-
-      let child = childrens[childIndex]
-
-      //carry over
-      let carryOverCell = sheet.getRange(row_index, projectColumnIndex);
-      let labelsarr = findCyclesInTheLabel(child.labels);
-      let labels_count_value = labelsarr.length > 1 ? labelsarr.length : ""
-      carryOverCell.setValue(labels_count_value);
-      if (labelsarr.length > 1) {
-        carryOverCell.setFontColor('white').setFontWeight('bold').setHorizontalAlignment("center");
-        carryOverCell.setBackground("purple");
-      }
-
-      //State
-      let stateCell = sheet.getRange(row_index, projectColumnIndex + 1);
-
-      stateCell.setFontColor('white').setFontWeight('bold').setHorizontalAlignment("center");
-      let backgroundColor = "white"; // Default color
-
-      if (COMPLETED_STATUSES.includes(child.status)) {
-        stateCell.setValue("C");
-        backgroundColor = "green"
-      } else {
-        if (child.state && STATE_COLORS[child.state]) {
-          backgroundColor = STATE_COLORS[child.state];
-        }
-        else {
-          if (GREEN_STATUSES.includes(child.status))
-            backgroundColor = "green";
-          else if (RED_STATUSES.includes(child.status))
-            backgroundColor = "red";
-        }
-      }
-      stateCell.setBackground(backgroundColor);
-
-      //Summary
-      let epicLinkURL = child.epicLink;
-      const richText = SpreadsheetApp.newRichTextValue()
-        .setText(child.summary + " (" + child.key + ")")
-        .setLinkUrl(child.summary.length + 2, child.summary.length + 2 + child.key.length, epicLinkURL)
-        .build();
-
-      sheet.getRange(row_index, projectColumnIndex + 2).setRichTextValue(richText);
-
-      row_index++;
-    }
-
-    sheet.getRange(row_index, projectColumnIndex, 1, 3).setValues([["", "", ""]])
-    row_index++;
   }
   return row_index;
 }
@@ -518,33 +407,29 @@ function parseProjectFilterValue(value) {
   };
 }
 
-function copyRangeWithFormatting(targetSheet, sourceRange, targetRow) {
-  const numRows = sourceRange.getNumRows();
-  const numCols = sourceRange.getNumColumns();
+function getSheetPosition(sheetName) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheets = ss.getSheets();
+  for (let i = 0; i < sheets.length; i++) {
+    if (sheets[i].getName() === sheetName) {
+      Logger.log(`Sheet "${sheetName}" is at position ${i + 1}`);
+      return i + 1; // Positions are 1-based for human readability
+    }
+  }
+  Logger.log("Sheet not found.");
+  return -1;
+}
 
-  targetSheet.insertRows(targetRow, numRows);
+function moveSheetToPosition(sheetName, position) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(sheetName);
 
-  const targetRange = targetSheet.getRange(targetRow, 1, numRows, numCols);
+  if (!sheet) {
+    Logger.log("Sheet not found.");
+    return;
+  }
 
-  targetRange.setValues(sourceRange.getValues());
-
-  targetRange.setBackgrounds(sourceRange.getBackgrounds());
-
-  targetRange.setFontColors(sourceRange.getFontColors());
-
-  targetRange.setFontFamilies(sourceRange.getFontFamilies());
-
-  targetRange.setFontSizes(sourceRange.getFontSizes());
-
-  targetRange.setFontWeights(sourceRange.getFontWeights());
-  targetRange.setFontStyles(sourceRange.getFontStyles());
-
-  targetRange.setNumberFormats(sourceRange.getNumberFormats());
-
-  targetRange.setHorizontalAlignments(sourceRange.getHorizontalAlignments());
-
-  targetRange.setVerticalAlignments(sourceRange.getVerticalAlignments());
-
-  targetRange.setWraps(sourceRange.getWraps());
-
+  // Set the sheet as active (required to move it)
+  ss.setActiveSheet(sheet);
+  ss.moveActiveSheet(position); // Position is 1-based
 }
