@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - 'raw_jira_data/**'
+      
+  workflow_dispatch:
 
 jobs:
   deploy:
