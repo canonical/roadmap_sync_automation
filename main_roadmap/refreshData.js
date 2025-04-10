@@ -1,9 +1,9 @@
-//TODO: multi cycles
-//TODO: copy of the sheet for CEO
+//TODO: transition process between cycles
+//TODO: grouping of the cycle is broken
 
-const SHEETS = ["cloud", "charming"]; //sheet names that should be processed
+const SHEETS = ["cloud"]; //sheet names that should be processed
 const CURRENT_CYCLE = "25.04"; //current cycle
-const JIRA_DATA_SPREADSHEET_ID = "1aZrcP6XP1Lfheyj5Z8yP8HdOfgF0dLr3hHb6HWDhWQM"; //Spreadsheet ID with Jira data for roadmap
+const JIRA_DATA_SPREADSHEET_ID = "1E_Qa5zCtI4JeiXKq0yW2KNzU9F1Q_Bt39FxVCxVMjZ4"; //Spreadsheet ID with Jira data for roadmap
 const CYCLE_REGEX_PATTERN = /^\d{2}\.\d{2}$/; //regex pattern for cycles
 const PROJECT_REGEX_PATTERN = /^(.*?)\((.*?)\)\[(.*?)\]$|^(.*?)\[(.*?)\]\((.*?)\)$|^(.*?)\((.*?)\)$|^(.*?)\[(.*?)\]$|^(.*?)$/; // regex pattern for project filter
 const BACKUP_FOLDER_ID = "10TXVDrdGcvQjmvjf5u0m8Lzj2vYObvXP"; //from the URL e.g. https://drive.google.com/drive/folders/**FOLDER_ID**
@@ -48,10 +48,10 @@ function processSheet(sheet) {
   if (cycles.has(CURRENT_CYCLE)) {
 
     sheetName = sheet.getName();
-    //create a copy of the sheet
-    let tempSheet = sheet.copyTo(ss);
-    tempSheet.setName(sheetName + "_temp");
-    tempSheet.hideSheet()
+    //create a copy of the sheet and hide it
+    let tempSheet = copyAndHideSheet(ss, sheet, sheetName + "_temp", true);
+    //copy original state of the sheet
+    copyAndHideSheet(ss, sheet, sheetName + "_original", true);
 
     let cycleRowIndex = cycles.get(CURRENT_CYCLE);
     let nextprevCycles = getNextPrevKeys(cycles, CURRENT_CYCLE);
@@ -92,12 +92,15 @@ function processSheet(sheet) {
       projectValue = projectsStringCell.getValue();
     }
 
+    //switch the temp and original sheets
     let position = getSheetPosition(sheetName);
     ss.deleteSheet(sheet);
     tempSheet.setName(sheetName);
     tempSheet.showSheet();
     moveSheetToPosition(sheetName, position)
-    //ss.setActiveSheet(tempSheet);
+
+    //grouping the rows
+    tempSheet.groupRows(cycleRowIndex, lastCycleRow);
   }
   else {
     Logger.log(`Cycle ${CURRENT_CYCLE} not found on the roadmap.`)
@@ -431,5 +434,23 @@ function moveSheetToPosition(sheetName, position) {
 
   // Set the sheet as active (required to move it)
   ss.setActiveSheet(sheet);
-  ss.moveActiveSheet(position); // Position is 1-based
+  ss.moveActiveSheet(position);
+}
+
+function copyAndHideSheet(ss, source_sheet, target_sheetName, clearIfExists = false) {
+
+  if(ss.sheets.filter(s => s.getName() === target_sheetName).length > 0) {
+      if (clearIfExists) {
+          let targetSheet = ss.getSheetByName(target_sheetName);
+          targetSheet.clear();
+          targetSheet.hideSheet();
+      }
+      return ss.getSheetByName(target_sheetName);
+    }
+  else {
+    let tempSheet = source_sheet.copyTo(ss);
+    tempSheet.setName(target_sheetName);
+    tempSheet.hideSheet()
+    return tempSheet;
+  }
 }

@@ -12,7 +12,7 @@ const JIRA_API_TOKEN_PROPERTY_NAME = "JIRA_API_TOKEN" //Api token saved in the s
 
 const ROADMAP_STATE_FIELD_ID = "customfield_11011" //id of the Roadmap State customfield in Jira. !!! check data processing section in case this id need to be changed
 const JIRA_API_BATCH_SIZE = 100; // For Jira API limits
-const JIRA_API_SLEEP = 500; // For Jira API limits
+const JIRA_API_SLEEP = 0; // For Jira API limits
 
 function main() {
   const sheet = SpreadsheetApp.getActiveSpreadsheet();
