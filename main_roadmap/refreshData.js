@@ -1,5 +1,5 @@
 //TODO: transition process between cycles
-//TODO: grouping of the cycle is broken
+//TODO: grouping of the cycles
 
 const SHEETS = ["cloud"]; //sheet names that should be processed
 const CURRENT_CYCLE = "25.04"; //current cycle
@@ -51,7 +51,7 @@ function processSheet(sheet) {
     //create a copy of the sheet and hide it
     let tempSheet = copyAndHideSheet(ss, sheet, sheetName + "_temp", true);
     //copy original state of the sheet
-    copyAndHideSheet(ss, sheet, sheetName + "_original", true);
+    copyAndHideSheet(ss, sheet, sheetName + "_original");
 
     let cycleRowIndex = cycles.get(CURRENT_CYCLE);
     let nextprevCycles = getNextPrevKeys(cycles, CURRENT_CYCLE);
