@@ -1,6 +1,6 @@
-# This workflow deploys the Apps Script project for script that fetches Jira data
+# This workflow deploys the Apps Script project for script that update roadmap
 # clasp details https://developers.google.com/apps-script/guides/clasp
-name: Deploy to Apps Script - fetch Jira Data
+name: Deploy to Apps Script - update roadmap
 
 on:
   push:
