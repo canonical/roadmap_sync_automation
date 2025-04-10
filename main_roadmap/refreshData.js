@@ -438,14 +438,15 @@ function moveSheetToPosition(sheetName, position) {
 }
 
 function copyAndHideSheet(ss, source_sheet, target_sheetName, clearIfExists = false) {
-
-  if(ss.sheets.filter(s => s.getName() === target_sheetName).length > 0) {
+  const existSheet = ss.getSheetByName(target_sheetName);
+  
+  if(existSheet) {
       if (clearIfExists) {
           let targetSheet = ss.getSheetByName(target_sheetName);
           targetSheet.clear();
           targetSheet.hideSheet();
       }
-      return ss.getSheetByName(target_sheetName);
+      return ss.getSheetByName(existSheet);
     }
   else {
     let tempSheet = source_sheet.copyTo(ss);
