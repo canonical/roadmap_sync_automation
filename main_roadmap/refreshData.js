@@ -1,7 +1,7 @@
 //TODO: transition process between cycles
 //TODO: grouping of the cycles
 
-const SHEETS = ["cloud"]; //sheet names that should be processed
+const SHEETS = ["cloud", "charming"]; //sheet names that should be processed
 const CURRENT_CYCLE = "25.04"; //current cycle
 const JIRA_DATA_SPREADSHEET_ID = "1E_Qa5zCtI4JeiXKq0yW2KNzU9F1Q_Bt39FxVCxVMjZ4"; //Spreadsheet ID with Jira data for roadmap
 const CYCLE_REGEX_PATTERN = /^\d{2}\.\d{2}$/; //regex pattern for cycles
@@ -29,23 +29,24 @@ const ALL_CYCLES_COLUMN_INDEX = 1; //column index with all cycles
 function main() {
   backupSpreadsheet(BACKUP_FOLDER_ID, MAX_BACKUPS_COUNT) //create backup of the spreadsheet
 
+  let ss = SpreadsheetApp.getActiveSpreadsheet();
   for (const sheetName of SHEETS) {
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
+    const sheet = ss.getSheetByName(sheetName);
     if (!sheet) {
       Logger.log(`Sheet ${sheetName} not found.`);
       continue;
     }
 
     Logger.log(`Fetching data for sheet: ${sheetName}`);
-    processSheet(sheet);
+    processSheet(ss, sheet, CURRENT_CYCLE); //process the sheet
   }
 }
 
-function processSheet(sheet) {
+function processSheet(ss, sheet, cycleNumber) {
   let cycles = findCyclesOnTheSheet(sheet); // get info about cycles numbers and their positions on the sheet
-  let ss = SpreadsheetApp.getActiveSpreadsheet()
+  
 
-  if (cycles.has(CURRENT_CYCLE)) {
+  if (cycles.has(cycleNumber)) {
 
     sheetName = sheet.getName();
     //create a copy of the sheet and hide it
@@ -53,10 +54,11 @@ function processSheet(sheet) {
     //copy original state of the sheet
     copyAndHideSheet(ss, sheet, sheetName + "_original");
 
-    let cycleRowIndex = cycles.get(CURRENT_CYCLE);
-    let nextprevCycles = getNextPrevKeys(cycles, CURRENT_CYCLE);
+    let cycleRowIndex = cycles.get(cycleNumber);
+    let nextprevCycles = getNextPrevKeys(cycles, cycleNumber);
 
     let lastCycleRow = nextprevCycles.next ? cycles.get(nextprevCycles.next) : tempSheet.getLastRow() + 2;
+    let maxRow = 0
 
     let projectColumnIndex = 4;
     let projectsStringCell = tempSheet.getRange(PROJECT_ROW_INDEX, projectColumnIndex);
@@ -79,6 +81,9 @@ function processSheet(sheet) {
 
         if (projectFilter) {
           row_index = processProject(projectFilter, tempSheet, row_index, currentColumnIndex, lastCycleRow)
+          if (row_index > maxRow) {
+            maxRow = row_index;
+          }
           if (row_index > lastCycleRow)
             lastCycleRow = row_index;
         }
@@ -88,30 +93,39 @@ function processSheet(sheet) {
 
       currentColumnIndex += 3;
       projectColumnIndex += 3;
-      projectsStringCell = sheet.getRange(PROJECT_ROW_INDEX, projectColumnIndex);
+      projectsStringCell = tempSheet.getRange(PROJECT_ROW_INDEX, projectColumnIndex);
       projectValue = projectsStringCell.getValue();
     }
 
+    //delete empty rows
+
+    for (var i = lastCycleRow - 1; i >= maxRow; i--) {
+      tempSheet.deleteRow(i);
+    }
+
+    //grouping
+    const group = tempSheet.getRowGroup(cycleRowIndex + 1, 1)
+    group.remove();
+    let cycleRange = tempSheet.getRange(cycleRowIndex + 1, 1, maxRow - currentRowIndex, 3)
+    cycleRange.shiftRowGroupDepth(1);
+
     //switch the temp and original sheets
-    let position = getSheetPosition(sheetName);
+    let position = getSheetPosition(ss, sheetName);
     ss.deleteSheet(sheet);
     tempSheet.setName(sheetName);
     tempSheet.showSheet();
-    moveSheetToPosition(sheetName, position)
-
-    //grouping the rows
-    tempSheet.groupRows(cycleRowIndex, lastCycleRow);
+    moveSheetToPosition(ss, sheetName, position)
   }
   else {
-    Logger.log(`Cycle ${CURRENT_CYCLE} not found on the roadmap.`)
+    Logger.log(`Cycle ${cycleNumber} not found on the roadmap.`)
   }
 }
 
-function processProject(projectFilter, sheet, row_index, projectColumnIndex, lastCycleRow) {
+function processProject(cycleNumber, projectFilter, sheet, row_index, projectColumnIndex, lastCycleRow) {
 
   Logger.log(`Fetching data for project: ${projectFilter.projectKey}. Components: ${projectFilter.components} Labels: ${projectFilter.labels}`);
 
-  let projectData = getProjectIssuesInHierarchy(projectFilter);
+  let projectData = getProjectIssuesInHierarchy(projectFilter, cycleNumber);
 
   for (let parent in projectData) {
     let issue = projectData[parent]
@@ -147,7 +161,7 @@ function processProject(projectFilter, sheet, row_index, projectColumnIndex, las
 
       //carry over
       let carryOverCell = sheet.getRange(row_index, projectColumnIndex);
-      let labelsarr = findCyclesInTheLabel(child.labels);
+      let labelsarr = findCyclesInTheLabel(child.labels, cycleNumber);
       let labels_count_value = labelsarr.length > 1 ? labelsarr.length : ""
       carryOverCell.setValue(labels_count_value);
       if (labelsarr.length > 1) {
@@ -201,8 +215,8 @@ function processProject(projectFilter, sheet, row_index, projectColumnIndex, las
   return row_index;
 }
 
-function getProjectIssuesInHierarchy(projectFilter) {
-  let sheetName = CURRENT_CYCLE + "_data";
+function getProjectIssuesInHierarchy(projectFilter, cycleNumber) {
+  let sheetName = cycleNumber + "_data";
   let externalSpreadsheet = SpreadsheetApp.openById(JIRA_DATA_SPREADSHEET_ID);
   let sheet = externalSpreadsheet.getSheetByName(sheetName);
   let data = sheet.getDataRange().getValues()
@@ -290,7 +304,7 @@ function findCyclesOnTheSheet(sheet) {
   return valueToCellMap;
 }
 
-function findCyclesInTheLabel(labels) {
+function findCyclesInTheLabel(labels, cycleNumber) {
   let labelsArray = []
   if (labels) {
     const allLabels = labels.split(",");
@@ -298,7 +312,7 @@ function findCyclesInTheLabel(labels) {
     allLabels.forEach(label => {
       label = label.toString().trim()
       if (CYCLE_REGEX_PATTERN.test(label)) {
-        if (parseFloat(label) <= parseFloat(CURRENT_CYCLE)) {
+        if (parseFloat(label) <= parseFloat(cycleNumber)) {
           labelsArray.push(label)
         }
       }
@@ -410,12 +424,10 @@ function parseProjectFilterValue(value) {
   };
 }
 
-function getSheetPosition(sheetName) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+function getSheetPosition(ss, sheetName) {
   const sheets = ss.getSheets();
   for (let i = 0; i < sheets.length; i++) {
     if (sheets[i].getName() === sheetName) {
-      Logger.log(`Sheet "${sheetName}" is at position ${i + 1}`);
       return i + 1; // Positions are 1-based for human readability
     }
   }
@@ -423,8 +435,7 @@ function getSheetPosition(sheetName) {
   return -1;
 }
 
-function moveSheetToPosition(sheetName, position) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+function moveSheetToPosition(ss, sheetName, position) {
   const sheet = ss.getSheetByName(sheetName);
 
   if (!sheet) {
@@ -437,21 +448,31 @@ function moveSheetToPosition(sheetName, position) {
   ss.moveActiveSheet(position);
 }
 
-function copyAndHideSheet(ss, source_sheet, target_sheetName, clearIfExists = false) {
+function copyAndHideSheet(ss, source_sheet, target_sheetName, deleteIfExists = false) {
   const existSheet = ss.getSheetByName(target_sheetName);
-  
-  if(existSheet) {
-      if (clearIfExists) {
-          let targetSheet = ss.getSheetByName(target_sheetName);
-          targetSheet.clear();
-          targetSheet.hideSheet();
-      }
-      return ss.getSheetByName(existSheet);
+
+  if (existSheet) {
+    if (deleteIfExists) {
+      let targetSheet = ss.getSheetByName(target_sheetName);
+      ss.deleteSheet(targetSheet);
     }
-  else {
-    let tempSheet = source_sheet.copyTo(ss);
-    tempSheet.setName(target_sheetName);
-    tempSheet.hideSheet()
-    return tempSheet;
+    else
+      return existSheet;
   }
+
+  let tempSheet = source_sheet.copyTo(ss);
+  tempSheet.setName(target_sheetName);
+  tempSheet.hideSheet()
+  return tempSheet;
+}
+
+
+function transitionToTheFutureCycle() {
+  // step 1: update the current cycle, but the state color for each issue should be
+  // - green with C if the status is in the COMPLETED_STATUSES
+  // - black if Roadmap state = dropped
+  // - red in all other statuses
+  // step 2: add new cycle to the roadmap, if it doesn't exist
+  // step 3: get issues for each project and add them to the new cycle
+  // step 5: group new cycle
 }
