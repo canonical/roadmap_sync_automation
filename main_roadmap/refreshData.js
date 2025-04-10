@@ -13,8 +13,6 @@ const GREEN_STATUSES = ["In Progress", "In Review", "To Be Deployed", "BLOCKED"]
 const RED_STATUSES = ["Rejected"] // statuses that red by default, if roadmap state is empty
 const COMPLETED_STATUSES = ["Done"] // C value in the color state
 
-const EMPTY_JIRA_PROJECT_KEY = "NONE"
-
 const STATE_COLORS = {
   "At Risk": "orange",
   "Excluded": "red",
@@ -45,7 +43,7 @@ function main() {
 
 function processSheet(ss, sheet, cycleNumber) {
   let cycles = findCyclesOnTheSheet(sheet); // get info about cycles numbers and their positions on the sheet
-  
+
 
   if (cycles.has(cycleNumber)) {
 
@@ -78,7 +76,6 @@ function processSheet(ss, sheet, cycleNumber) {
       let row_index = currentRowIndex;
 
       projects.forEach(projectKey => {
-        if (projectKey.toLowerCase() == EMPTY_JIRA_PROJECT_KEY.toLowerCase()) return;
 
         let projectFilter = parseProjectFilterValue(projectKey);
 
@@ -113,11 +110,12 @@ function processSheet(ss, sheet, cycleNumber) {
     cycleRange.shiftRowGroupDepth(1);
 
     //switch the temp and original sheets
-    let position = getSheetPosition(ss, sheetName);
+    //commented for tests
+    /*let position = getSheetPosition(ss, sheetName);
     ss.deleteSheet(sheet);
     tempSheet.setName(sheetName);
     tempSheet.showSheet();
-    moveSheetToPosition(ss, sheetName, position)
+    moveSheetToPosition(ss, sheetName, position)*/
   }
   else {
     Logger.log(`Cycle ${cycleNumber} not found on the roadmap.`)
