@@ -1,5 +1,4 @@
 //TODO: transition process between cycles
-//TODO: grouping of the cycles
 
 const SHEETS = ["cloud", "charming"]; //sheet names that should be processed
 const CURRENT_CYCLE = "25.04"; //current cycle
@@ -13,6 +12,8 @@ const WHITE_STATUSES = ["Untriaged", "Triaged"] //not started statuses
 const GREEN_STATUSES = ["In Progress", "In Review", "To Be Deployed", "BLOCKED"] // statuses that green by default, if roadmap state is empty
 const RED_STATUSES = ["Rejected"] // statuses that red by default, if roadmap state is empty
 const COMPLETED_STATUSES = ["Done"] // C value in the color state
+
+const EMPTY_JIRA_PROJECT_KEY = "NONE"
 
 const STATE_COLORS = {
   "At Risk": "orange",
@@ -77,10 +78,12 @@ function processSheet(ss, sheet, cycleNumber) {
       let row_index = currentRowIndex;
 
       projects.forEach(projectKey => {
+        if (projectKey.toLowerCase() == EMPTY_JIRA_PROJECT_KEY.toLowerCase()) return;
+
         let projectFilter = parseProjectFilterValue(projectKey);
 
         if (projectFilter) {
-          row_index = processProject(projectFilter, tempSheet, row_index, currentColumnIndex, lastCycleRow)
+          row_index = processProject(cycleNumber, projectFilter, tempSheet, row_index, currentColumnIndex, lastCycleRow)
           if (row_index > maxRow) {
             maxRow = row_index;
           }
