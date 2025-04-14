@@ -68,13 +68,17 @@ function main() {
     for (let project of projects) {
       Logger.log(`Fetching data for project: ${project}`);
 
-      let startAt = 0;
       let totalIssues = [];
       let response, jsonResponse;
+      let nextPageToken = null;
 
       do {
         const jqlQuery = encodeURIComponent(`"Properties[Checkboxes]" = "Roadmap Item" AND project = "${project}" AND issuetype = Epic AND labels = "${cycle}" ORDER BY parent ASC, key`);
-        const jiraUrl = `${jiraBaseUrl}/rest/api/3/search?jql=${jqlQuery}&fields=key,summary,status,${ROADMAP_STATE_FIELD_ID},labels,parent,components&maxResults=${JIRA_API_BATCH_SIZE}&startAt=${startAt}`;
+        let jiraUrl = `${jiraBaseUrl}/rest/api/3/search/jql?jql=${jqlQuery}&fields=key,summary,status,${ROADMAP_STATE_FIELD_ID},labels,parent,components&maxResults=${JIRA_API_BATCH_SIZE}`;
+
+        if (nextPageToken) {
+          jiraUrl += "&nextPageToken=" + nextPageToken;
+        }
 
         // API Request
         const options = {
@@ -82,8 +86,7 @@ function main() {
           headers: {
             Authorization: `Basic ${Utilities.base64Encode(jiraEmail + ":" + jiraToken)}`,
             Accept: "application/json"
-          },
-          muteHttpExceptions: true
+          }
         };
 
         try {
@@ -103,7 +106,7 @@ function main() {
           }
 
           totalIssues = totalIssues.concat(jsonResponse.issues);
-          startAt += JIRA_API_BATCH_SIZE;
+          nextPageToken = jsonResponse.nextPageToken || null;
 
           // Prevent hitting Jira rate limits
           if (JIRA_API_SLEEP > 0)
@@ -114,7 +117,7 @@ function main() {
           break;
         }
 
-      } while (startAt < jsonResponse.total);
+      } while (nextPageToken);
 
 
       // Process and append data
