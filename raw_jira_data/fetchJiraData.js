@@ -10,7 +10,7 @@ const CYCLES_CELL = "B3" //name of the cycles that need to be  fetched. Will be 
 const LAST_SYNC_DATE_CELL = "B1" //cell on the config sheet to store the lst update datetime
 const JIRA_API_TOKEN_PROPERTY_NAME = "JIRA_API_TOKEN" //Api token saved in the script properties
 
-const ROADMAP_STATE_FIELD_ID = "customfield_11011" //id of the Roadmap State customfield in Jira. !!! check data processing section in case this id need to be changed
+const ROADMAP_STATE_FIELD_ID = "customfield_10968" //id of the Roadmap State customfield in Jira. !!! check data processing section in case this id need to be changed
 const JIRA_API_BATCH_SIZE = 100; // For Jira API limits
 const JIRA_API_SLEEP = 0; // For Jira API limits
 
@@ -126,7 +126,7 @@ function main() {
         issue.key,
         issue.fields.summary,
         issue.fields.status.name,
-        issue.fields.customfield_11011 ? issue.fields.customfield_11011.value.replace(/[^\p{L}\p{N}\p{P}\p{Z}^$\n]/gu, '').trim() : "",
+        issue.fields.customfield_10968 ? issue.fields.customfield_10968.value.replace(/[^\p{L}\p{N}\p{P}\p{Z}^$\n]/gu, '').trim() : "",
         `'` + (issue.fields.labels || []).join(", "),
         getComponentsString(issue.fields.components),
         issue.fields.parent ? issue.fields.parent.key : "",
