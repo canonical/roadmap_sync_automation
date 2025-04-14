@@ -124,7 +124,7 @@ function processSheet(ss, sheet, cycleNumber) {
     catch {
       Logger.log("Group doesn't exist")
     }
-    let cycleRange = tempSheet.getRange(cycleRowIndex + 1, 1, maxRow - currentRowIndex, 3)
+    let cycleRange = tempSheet.getRange(cycleRowIndex + 1, 1, maxRow - cycleRowIndex + 1, 3)
     cycleRange.shiftRowGroupDepth(1);
 
     //switch the temp and original sheets
