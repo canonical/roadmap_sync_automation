@@ -40,6 +40,9 @@ function processSheets(ss, cycleNumber) {
       continue;
     }
 
+    //copy original state of the sheet
+    copyAndHideSheet(ss, sheet, sheetName + "_original");
+
     Logger.log(`Fetching data for sheet: ${sheetName}. Cycle Number: ${cycleNumber}`);
     processSheet(ss, sheet, cycleNumber); //process the sheet
   }
@@ -50,9 +53,6 @@ function processSheet(ss, sheet, cycleNumber) {
   sheetName = sheet.getName();
   //create a copy of the sheet and hide it
   let tempSheet = copyAndHideSheet(ss, sheet, sheetName + "_temp", true);
-  //copy original state of the sheet
-  copyAndHideSheet(ss, sheet, sheetName + "_original");
-
 
   let cycles = findCyclesOnTheSheet(tempSheet); // get info about cycles numbers and their positions on the sheet
 
@@ -119,12 +119,14 @@ function processSheet(ss, sheet, cycleNumber) {
     //grouping
     try {
       const group = tempSheet.getRowGroup(cycleRowIndex + 1, 1)
-      group.remove();
+      if (group) {
+        group.remove();
+      }
     }
     catch {
-      Logger.log("Group doesn't exist")
     }
-    let cycleRange = tempSheet.getRange(cycleRowIndex + 1, 1, maxRow - cycleRowIndex + 1, 3)
+
+    let cycleRange = tempSheet.getRange(cycleRowIndex + 1, 1, maxRow - (cycleRowIndex + 1), 3)
     cycleRange.shiftRowGroupDepth(1);
 
     //switch the temp and original sheets
