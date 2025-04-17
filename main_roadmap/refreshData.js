@@ -1,4 +1,5 @@
-const SHEETS = ["cloud", "charming", "saas", "devices"]; //sheet names that should be processed
+const SHEETS = ["cloud", "charming", "saas", "devices", "is", "product", "security", "excellence", "ubuntu", "web"];
+//const SHEETS = ["is"]; //sheet names that should be processed
 const CURRENT_CYCLE = "25.04"; //current cycle
 
 const JIRA_DATA_SPREADSHEET_ID = "1E_Qa5zCtI4JeiXKq0yW2KNzU9F1Q_Bt39FxVCxVMjZ4"; //Spreadsheet ID with Jira data for roadmap
@@ -22,6 +23,8 @@ const STATE_COLORS = {
 const PROJECT_ROW_INDEX = 2; //row index with projects keys
 const ALL_CYCLES_COLUMN_INDEX = 1; //column index with all cycles
 
+const INDEX_SHEET_NAME = "index";
+
 
 //main fucntion
 function main() {
@@ -30,6 +33,7 @@ function main() {
 
   let ss = SpreadsheetApp.getActiveSpreadsheet();
   processSheets(ss, CURRENT_CYCLE)
+  generateIndexSheet(ss);
 }
 
 function processSheets(ss, cycleNumber) {
@@ -314,7 +318,7 @@ function findCyclesOnTheSheet(sheet) {
   for (let i = 0; i < values.length; i++) {
     const cellValue = values[i][0];
     if (CYCLE_REGEX_PATTERN.test(cellValue)) {
-      valueToCellMap.set(cellValue, i + 1);
+      valueToCellMap.set(cellValue.toString(), i + 1);
     }
   }
 
@@ -481,4 +485,52 @@ function copyAndHideSheet(ss, source_sheet, target_sheetName, deleteIfExists = f
   tempSheet.setName(target_sheetName);
   tempSheet.hideSheet()
   return tempSheet;
+}
+
+function generateIndexSheet(ss) {
+
+  Logger.log("Index sheet generation started.");
+  // Get or create the Index sheet
+  let indexSheet = ss.getSheetByName(INDEX_SHEET_NAME);
+
+  copyAndHideSheet(ss, indexSheet, indexSheet.getName() + "_original")
+
+  for (let i = 1; i <= indexSheet.getLastColumn(); i++) {
+    sheetName = indexSheet.getRange(1, i).getValue().toLowerCase()
+    //Logger.log("Sheet Name: " + sheetName)
+    indexSheet.getRange(3, i, indexSheet.getLastRow(), 1).clear({
+      contentsOnly: true,
+      formatOnly: false
+    });
+
+    targetSheet = ss.getSheetByName(sheetName);
+    if (targetSheet) {
+      const targetSheetId = targetSheet.getSheetId();
+
+      valuesRange = targetSheet.getRange(1, 1, 1, targetSheet.getLastColumn());
+
+      let rowIndex = 3
+
+      for (let j = 1; j <= valuesRange.getNumColumns(); j++) {
+        let teamName = targetSheet.getRange(1, j).getValue()
+        let jiraProjectKey = targetSheet.getRange(2, j).getValue()
+        if (teamName && jiraProjectKey) {
+          //Logger.log("Team Name:" + teamName);
+          let rangeid = targetSheet.getRange(1, j - 2, 1, 3).getA1Notation()
+          const url = `${ss.getUrl()}#gid=${targetSheetId}&range=${rangeid}`;
+          const linkText = `${teamName}`;
+
+          const richText = SpreadsheetApp.newRichTextValue()
+            .setText(linkText)
+            .setLinkUrl(url)
+            .build();
+
+          indexSheet.getRange(rowIndex, i).setRichTextValue(richText);
+          rowIndex += 1;
+        }
+      }
+    }
+  }
+
+  Logger.log("Index sheet updated.");
 }
