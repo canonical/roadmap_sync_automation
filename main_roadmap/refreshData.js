@@ -87,7 +87,10 @@ function processSheet(ss, sheet, cycleNumber) {
     while (projectValue) {
       let projects = projectsStringCell.getValue().toString().split(";");
 
-      let projectsRange = tempSheet.getRange(currentRowIndex, currentColumnIndex, lastCycleRow - currentRowIndex, 3);
+      //one time call. Needed for creation of the additional column
+      //tempSheet.insertColumnAfter(currentColumnIndex+2)
+
+      let projectsRange = tempSheet.getRange(currentRowIndex, currentColumnIndex, lastCycleRow - currentRowIndex, 4);
       projectsRange.clear();
       projectsRange.clearFormat();
       projectsRange.setWrapStrategy(SpreadsheetApp.WrapStrategy.CLIP);
@@ -110,8 +113,9 @@ function processSheet(ss, sheet, cycleNumber) {
           Logger.log(`Project filter ${projectKey} is invalid. Please check the format. It can be <project key>(<labels>)[<components>], <project key>[<components>](<labels>), <project key>(<labels>), <project key>[<components>] or just <project key>`)
       })
 
-      currentColumnIndex += 3;
-      projectColumnIndex += 3;
+      tempSheet.autoResizeColumn(currentColumnIndex + 3)
+      currentColumnIndex += 4;
+      projectColumnIndex += 4;
       projectsStringCell = tempSheet.getRange(PROJECT_ROW_INDEX, projectColumnIndex);
       projectValue = projectsStringCell.getValue();
     }
@@ -130,8 +134,10 @@ function processSheet(ss, sheet, cycleNumber) {
     catch {
     }
 
-    let cycleRange = tempSheet.getRange(cycleRowIndex + 1, 1, maxRow - (cycleRowIndex + 1), 3)
-    cycleRange.shiftRowGroupDepth(1);
+    if (maxRow - (cycleRowIndex + 1) > 0) {
+      let cycleRange = tempSheet.getRange(cycleRowIndex + 1, 1, maxRow - (cycleRowIndex + 1), 3)
+      cycleRange.shiftRowGroupDepth(1);
+    }
 
     //switch the temp and original sheets
     let position = getSheetPosition(ss, sheetName);
@@ -160,13 +166,16 @@ function processProject(cycleNumber, projectFilter, sheet, row_index, projectCol
 
       //Summary
       let parentLinkURL = issue.parentLink;
+      sheet.getRange(row_index, projectColumnIndex + 2).setValue(issue.summary)
+      sheet.getRange(row_index, projectColumnIndex + 2).setFontWeight("bold");
+
       const richText = SpreadsheetApp.newRichTextValue()
-        .setText(issue.summary + " (" + issue.key + ")")
-        .setLinkUrl(issue.summary.length + 2, issue.summary.length + 2 + issue.key.length, parentLinkURL)
+        .setText(issue.key)
+        .setLinkUrl(parentLinkURL)
         .build();
 
-      sheet.getRange(row_index, projectColumnIndex + 2).setRichTextValue(richText);
-      sheet.getRange(row_index, projectColumnIndex + 2).setFontWeight("bold");
+      sheet.getRange(row_index, projectColumnIndex + 3).setRichTextValue(richText);
+      sheet.getRange(row_index, projectColumnIndex + 3).setFontWeight("bold");
       row_index++;
       if (row_index >= lastCycleRow - 1) {
         sheet.insertRowAfter(row_index)
@@ -214,12 +223,14 @@ function processProject(cycleNumber, projectFilter, sheet, row_index, projectCol
 
       //Summary
       let epicLinkURL = child.epicLink;
+
+      sheet.getRange(row_index, projectColumnIndex + 2).setValue(child.summary)
       const richText = SpreadsheetApp.newRichTextValue()
-        .setText(child.summary + " (" + child.key + ")")
-        .setLinkUrl(child.summary.length + 2, child.summary.length + 2 + child.key.length, epicLinkURL)
+        .setText(child.key)
+        .setLinkUrl(epicLinkURL)
         .build();
 
-      sheet.getRange(row_index, projectColumnIndex + 2).setRichTextValue(richText);
+      sheet.getRange(row_index, projectColumnIndex + 3).setRichTextValue(richText);
 
       row_index++;
       if (row_index >= lastCycleRow - 1) {
@@ -227,7 +238,7 @@ function processProject(cycleNumber, projectFilter, sheet, row_index, projectCol
       }
     }
 
-    sheet.getRange(row_index, projectColumnIndex, 1, 3).setValues([["", "", ""]])
+    sheet.getRange(row_index, projectColumnIndex, 1, 4).setValues([["", "", "", ""]])
     row_index++;
     if (row_index >= lastCycleRow - 1) {
       sheet.insertRowAfter(row_index);
