@@ -109,10 +109,17 @@ function processSheet(ss, sheet, cycleNumber) {
     let projectsStringCell = tempSheet.getRange(PROJECT_ROW_INDEX, projectColumnIndex);
     let projectValue = projectsStringCell.getValue();
 
-
     let currentRowIndex = cycleRowIndex + 1;
     let currentColumnIndex = 2;
+
+    for (let row = cycleRowIndex; row < lastCycleRow; row++) {
+      let depth = tempSheet.getRowGroupDepth(row);
+      if (depth < 1) continue;
+      tempSheet.getRowGroup(row, depth).remove();
+    }
+
     while (projectValue) {
+
       let projects = projectsStringCell.getValue().toString().split(";");
 
       //one time call. Needed for creation of the additional column
@@ -122,12 +129,6 @@ function processSheet(ss, sheet, cycleNumber) {
       projectsRange.clear();
       projectsRange.clearFormat();
       projectsRange.setWrapStrategy(SpreadsheetApp.WrapStrategy.CLIP);
-
-      for (let row = cycleRowIndex; row < lastCycleRow; row++) {
-        let depth = tempSheet.getRowGroupDepth(row);
-        if (depth < 1) continue;
-        tempSheet.getRowGroup(row, depth).remove();
-      }
 
       let row_index = currentRowIndex;
 
@@ -192,24 +193,18 @@ function processProject(cycleNumber, projectFilter, sheet, row_index, projectCol
     let issue = projectData[parent]
 
     if (parent != 'None') {
-      //Carry over
-      sheet.getRange(row_index, projectColumnIndex).setValue("")
-
-      //State
-      sheet.getRange(row_index, projectColumnIndex + 1).setValue("")
 
       //Summary
       let parentLinkURL = issue.parentLink;
-      sheet.getRange(row_index, projectColumnIndex + 2).setValue(issue.summary)
-      sheet.getRange(row_index, projectColumnIndex + 2).setFontWeight("bold");
+
+      sheet.getRange(row_index, projectColumnIndex, 1, 4).setValues([["", "", issue.summary, issue.key]]).setFontWeight("bold");
 
       const richText = SpreadsheetApp.newRichTextValue()
         .setText(issue.key)
         .setLinkUrl(parentLinkURL)
         .build();
-
       sheet.getRange(row_index, projectColumnIndex + 3).setRichTextValue(richText);
-      sheet.getRange(row_index, projectColumnIndex + 3).setFontWeight("bold");
+
       row_index++;
       if (row_index >= lastCycleRow - 1) {
         sheet.insertRowAfter(row_index)
@@ -221,7 +216,6 @@ function processProject(cycleNumber, projectFilter, sheet, row_index, projectCol
     for (let childIndex in childrens) {
 
       let child = childrens[childIndex]
-      //Logger.log(`Row Index: ${row_index} Epic: ${child.key} Status: "${child.status}" State: "${child.state}" Labels: "${child.labels}"`)
 
       //carry over
       let carryOverCell = sheet.getRange(row_index, projectColumnIndex);
@@ -273,6 +267,7 @@ function processProject(cycleNumber, projectFilter, sheet, row_index, projectCol
     }
 
     sheet.getRange(row_index, projectColumnIndex, 1, 4).setValues([["", "", "", ""]])
+
     row_index++;
     if (row_index >= lastCycleRow - 1) {
       sheet.insertRowAfter(row_index);
@@ -285,7 +280,6 @@ function processProject(cycleNumber, projectFilter, sheet, row_index, projectCol
 }
 
 function getProjectIssuesInHierarchy(projectFilter, cycleNumber) {
-  const start = new Date();
   let data;
 
   if (cycleNumber in raw_data_cache) {
@@ -365,9 +359,6 @@ function getProjectIssuesInHierarchy(projectFilter, cycleNumber) {
       });
     }
   }
-  const end = new Date();
-  const executionTime = end - start
-  Logger.log(`getProjectIssuesInHierarchy() execution time: ${executionTime} ms`);
 
   return hierarchy
 }
@@ -420,7 +411,7 @@ function getNextPrevKeys(map, key) {
 }
 
 function backupSpreadsheet(backupFolderID, maxBackups) {
-
+  const start = new Date();
   Logger.log("Backup creation. Backup folder: " + backupFolderID)
 
   const sourceSpreadsheet = SpreadsheetApp.getActiveSpreadsheet();
@@ -438,6 +429,10 @@ function backupSpreadsheet(backupFolderID, maxBackups) {
 
   // Clean up old backups
   deleteOldBackups(folder, sourceSpreadsheet.getName(), maxBackups);
+
+  const end = new Date();
+  const executionTime = (end - start);
+  Logger.log(`backupSpreadsheet execution time: ${executionTime} ms`);
 }
 
 // Helper function to delete older backups beyond the limit
@@ -547,17 +542,6 @@ function copyAndHideSheet(ss, source_sheet, target_sheetName, deleteIfExists = f
   tempSheet.setName(target_sheetName);
   tempSheet.hideSheet()
   return tempSheet;
-}
-
-function removeAllGroupsFromSheet(ss) {
-  let sheet = SpreadsheetApp.getActiveSheet();
-  let lastRow = sheet.getDataRange().getLastRow();
-
-  for (let row = 1; row < lastRow; row++) {
-    let depth = sheet.getRowGroupDepth(row);
-    if (depth < 1) continue;
-    sheet.getRowGroup(row, depth).remove();
-  }
 }
 
 function generateIndexSheet(ss) {
