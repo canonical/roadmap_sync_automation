@@ -1,12 +1,13 @@
 const SHEETS = ["cloud", "charming", "saas", "devices", "is", "product", "security", "excellence", "ubuntu", "web"];
-//const SHEETS = ["is"]; //sheet names that should be processed
+//const SHEETS = ["cloud"]; //sheet names that should be processed
 const CURRENT_CYCLE = "25.04"; //current cycle
+const FUTURE_CYCLE = "25.10"; //leave empty if not needed
 
 const JIRA_DATA_SPREADSHEET_ID = "1E_Qa5zCtI4JeiXKq0yW2KNzU9F1Q_Bt39FxVCxVMjZ4"; //Spreadsheet ID with Jira data for roadmap
 const CYCLE_REGEX_PATTERN = /^\d{2}\.\d{2}$/; //regex pattern for cycles
 const PROJECT_REGEX_PATTERN = /^(.*?)\((.*?)\)\[(.*?)\]$|^(.*?)\[(.*?)\]\((.*?)\)$|^(.*?)\((.*?)\)$|^(.*?)\[(.*?)\]$|^(.*?)$/; // regex pattern for project filter
 const BACKUP_FOLDER_ID = "10TXVDrdGcvQjmvjf5u0m8Lzj2vYObvXP"; //from the URL e.g. https://drive.google.com/drive/folders/**FOLDER_ID**
-const MAX_BACKUPS_COUNT = 720; // 1 month for run every hour 
+const MAX_BACKUPS_COUNT = 10;
 
 const WHITE_STATUSES = ["Untriaged", "Triaged"] //not started statuses
 const GREEN_STATUSES = ["In Progress", "In Review", "To Be Deployed", "BLOCKED"] // statuses that green by default, if roadmap state is empty
@@ -25,18 +26,45 @@ const ALL_CYCLES_COLUMN_INDEX = 1; //column index with all cycles
 
 const INDEX_SHEET_NAME = "index";
 
+let raw_data_cache = {};
 
-//main fucntion
+//main function for manual run or for time based trigger
 function main() {
   //create backup of the spreadsheet
   backupSpreadsheet(BACKUP_FOLDER_ID, MAX_BACKUPS_COUNT)
 
   let ss = SpreadsheetApp.getActiveSpreadsheet();
-  processSheets(ss, CURRENT_CYCLE)
+  processSheets(ss, CURRENT_CYCLE, true);
+  if (FUTURE_CYCLE) {
+    processSheets(ss, FUTURE_CYCLE, false);
+  }
+  generateIndexSheet(ss);
+}
+//time based fucntion for trigger
+function syncCurrentCycle() {
+  //create backup of the spreadsheet
+  backupSpreadsheet(BACKUP_FOLDER_ID, MAX_BACKUPS_COUNT)
+
+  let ss = SpreadsheetApp.getActiveSpreadsheet();
+  processSheets(ss, CURRENT_CYCLE, true);
+
   generateIndexSheet(ss);
 }
 
-function processSheets(ss, cycleNumber) {
+//time based fucntion for trigger
+function syncFutureCycle() {
+  if (FUTURE_CYCLE) {
+    //create backup of the spreadsheet
+    backupSpreadsheet(BACKUP_FOLDER_ID, MAX_BACKUPS_COUNT)
+
+    let ss = SpreadsheetApp.getActiveSpreadsheet();
+
+    processSheets(ss, FUTURE_CYCLE, false);
+    generateIndexSheet(ss);
+  }
+}
+
+function processSheets(ss, cycleNumber, withColorUpdate) {
   for (const sheetName of SHEETS) {
     const sheet = ss.getSheetByName(sheetName);
     if (!sheet) {
@@ -48,11 +76,11 @@ function processSheets(ss, cycleNumber) {
     copyAndHideSheet(ss, sheet, sheetName + "_original");
 
     Logger.log(`Fetching data for sheet: ${sheetName}. Cycle Number: ${cycleNumber}`);
-    processSheet(ss, sheet, cycleNumber); //process the sheet
+    processSheet(ss, sheet, cycleNumber, withColorUpdate); //process the sheet
   }
 }
 
-function processSheet(ss, sheet, cycleNumber) {
+function processSheet(ss, sheet, cycleNumber, withColorUpdate) {
 
   sheetName = sheet.getName();
   //create a copy of the sheet and hide it
@@ -81,10 +109,17 @@ function processSheet(ss, sheet, cycleNumber) {
     let projectsStringCell = tempSheet.getRange(PROJECT_ROW_INDEX, projectColumnIndex);
     let projectValue = projectsStringCell.getValue();
 
-
     let currentRowIndex = cycleRowIndex + 1;
     let currentColumnIndex = 2;
+
+    for (let row = cycleRowIndex; row < lastCycleRow; row++) {
+      let depth = tempSheet.getRowGroupDepth(row);
+      if (depth < 1) continue;
+      tempSheet.getRowGroup(row, depth).remove();
+    }
+
     while (projectValue) {
+
       let projects = projectsStringCell.getValue().toString().split(";");
 
       //one time call. Needed for creation of the additional column
@@ -102,7 +137,7 @@ function processSheet(ss, sheet, cycleNumber) {
         let projectFilter = parseProjectFilterValue(projectKey);
 
         if (projectFilter) {
-          row_index = processProject(cycleNumber, projectFilter, tempSheet, row_index, currentColumnIndex, lastCycleRow)
+          row_index = processProject(cycleNumber, projectFilter, tempSheet, row_index, currentColumnIndex, lastCycleRow, withColorUpdate)
           if (row_index > maxRow) {
             maxRow = row_index;
           }
@@ -148,8 +183,8 @@ function processSheet(ss, sheet, cycleNumber) {
   }
 }
 
-function processProject(cycleNumber, projectFilter, sheet, row_index, projectColumnIndex, lastCycleRow) {
-
+function processProject(cycleNumber, projectFilter, sheet, row_index, projectColumnIndex, lastCycleRow, withColorUpdate) {
+  const start = new Date();
   Logger.log(`Fetching data for project: ${projectFilter.projectKey}. Components: ${projectFilter.components} Labels: ${projectFilter.labels}`);
 
   let projectData = getProjectIssuesInHierarchy(projectFilter, cycleNumber);
@@ -158,24 +193,18 @@ function processProject(cycleNumber, projectFilter, sheet, row_index, projectCol
     let issue = projectData[parent]
 
     if (parent != 'None') {
-      //Carry over
-      sheet.getRange(row_index, projectColumnIndex).setValue("")
-
-      //State
-      sheet.getRange(row_index, projectColumnIndex + 1).setValue("")
 
       //Summary
       let parentLinkURL = issue.parentLink;
-      sheet.getRange(row_index, projectColumnIndex + 2).setValue(issue.summary)
-      sheet.getRange(row_index, projectColumnIndex + 2).setFontWeight("bold");
+
+      sheet.getRange(row_index, projectColumnIndex, 1, 4).setValues([["", "", issue.summary, issue.key]]).setFontWeight("bold");
 
       const richText = SpreadsheetApp.newRichTextValue()
         .setText(issue.key)
         .setLinkUrl(parentLinkURL)
         .build();
-
       sheet.getRange(row_index, projectColumnIndex + 3).setRichTextValue(richText);
-      sheet.getRange(row_index, projectColumnIndex + 3).setFontWeight("bold");
+
       row_index++;
       if (row_index >= lastCycleRow - 1) {
         sheet.insertRowAfter(row_index)
@@ -187,39 +216,40 @@ function processProject(cycleNumber, projectFilter, sheet, row_index, projectCol
     for (let childIndex in childrens) {
 
       let child = childrens[childIndex]
-      //Logger.log(`Row Index: ${row_index} Epic: ${child.key} Status: "${child.status}" State: "${child.state}" Labels: "${child.labels}"`)
 
       //carry over
-      let carryOverCell = sheet.getRange(row_index, projectColumnIndex);
-      let labelsarr = findCyclesInTheLabel(child.labels, cycleNumber);
-      let labels_count_value = labelsarr.length > 1 ? labelsarr.length : ""
-      carryOverCell.setValue(labels_count_value);
-      if (labelsarr.length > 1) {
-        carryOverCell.setFontColor('white').setFontWeight('bold').setHorizontalAlignment("center");
-        carryOverCell.setBackground("purple");
-      }
-
-      //State
-      let stateCell = sheet.getRange(row_index, projectColumnIndex + 1);
-
-      stateCell.setFontColor('white').setFontWeight('bold').setHorizontalAlignment("center");
-      let backgroundColor = "white"; // Default color
-
-      if (COMPLETED_STATUSES.includes(child.status)) {
-        stateCell.setValue("C");
-        backgroundColor = "green"
-      } else {
-        if (child.state && STATE_COLORS[child.state]) {
-          backgroundColor = STATE_COLORS[child.state];
+      if (withColorUpdate) {
+        let carryOverCell = sheet.getRange(row_index, projectColumnIndex);
+        let labelsarr = findCyclesInTheLabel(child.labels, cycleNumber);
+        let labels_count_value = labelsarr.length > 1 ? labelsarr.length : ""
+        carryOverCell.setValue(labels_count_value);
+        if (labelsarr.length > 1) {
+          carryOverCell.setFontColor('white').setFontWeight('bold').setHorizontalAlignment("center");
+          carryOverCell.setBackground("purple");
         }
-        else {
-          if (GREEN_STATUSES.includes(child.status))
-            backgroundColor = "green";
-          else if (RED_STATUSES.includes(child.status))
-            backgroundColor = "red";
+
+        //State
+        let stateCell = sheet.getRange(row_index, projectColumnIndex + 1);
+
+        stateCell.setFontColor('white').setFontWeight('bold').setHorizontalAlignment("center");
+        let backgroundColor = "white"; // Default color
+
+        if (COMPLETED_STATUSES.includes(child.status)) {
+          stateCell.setValue("C");
+          backgroundColor = "green"
+        } else {
+          if (child.state && STATE_COLORS[child.state]) {
+            backgroundColor = STATE_COLORS[child.state];
+          }
+          else {
+            if (GREEN_STATUSES.includes(child.status))
+              backgroundColor = "green";
+            else if (RED_STATUSES.includes(child.status))
+              backgroundColor = "red";
+          }
         }
+        stateCell.setBackground(backgroundColor);
       }
-      stateCell.setBackground(backgroundColor);
 
       //Summary
       let epicLinkURL = child.epicLink;
@@ -239,19 +269,34 @@ function processProject(cycleNumber, projectFilter, sheet, row_index, projectCol
     }
 
     sheet.getRange(row_index, projectColumnIndex, 1, 4).setValues([["", "", "", ""]])
+
     row_index++;
     if (row_index >= lastCycleRow - 1) {
       sheet.insertRowAfter(row_index);
     }
   }
+  const end = new Date();
+  const executionTime = end - start
+  Logger.log(`processProject execution time: ${executionTime} ms`);
   return row_index;
 }
 
 function getProjectIssuesInHierarchy(projectFilter, cycleNumber) {
-  let sheetName = cycleNumber + "_data";
-  let externalSpreadsheet = SpreadsheetApp.openById(JIRA_DATA_SPREADSHEET_ID);
-  let sheet = externalSpreadsheet.getSheetByName(sheetName);
-  let data = sheet.getDataRange().getValues()
+  const start = new Date();
+  let data;
+
+  if (cycleNumber in raw_data_cache) {
+    data = raw_data_cache[cycleNumber]
+  }
+  else {
+    let sheetName = cycleNumber + "_data";
+    let externalSpreadsheet = SpreadsheetApp.openById(JIRA_DATA_SPREADSHEET_ID);
+    let sheet = externalSpreadsheet.getSheetByName(sheetName);
+    data = sheet.getDataRange().getValues()
+    raw_data_cache[cycleNumber] = data
+  }
+
+
   let hierarchy = {};
 
   for (let i = 1; i < data.length; i++) {
@@ -317,6 +362,9 @@ function getProjectIssuesInHierarchy(projectFilter, cycleNumber) {
       });
     }
   }
+  const end = new Date();
+  const executionTime = end - start
+  Logger.log(`getProjectIssuesInHierarchy() execution time: ${executionTime} ms`);
 
   return hierarchy
 }
@@ -369,7 +417,7 @@ function getNextPrevKeys(map, key) {
 }
 
 function backupSpreadsheet(backupFolderID, maxBackups) {
-
+  const start = new Date();
   Logger.log("Backup creation. Backup folder: " + backupFolderID)
 
   const sourceSpreadsheet = SpreadsheetApp.getActiveSpreadsheet();
@@ -387,6 +435,10 @@ function backupSpreadsheet(backupFolderID, maxBackups) {
 
   // Clean up old backups
   deleteOldBackups(folder, sourceSpreadsheet.getName(), maxBackups);
+
+  const end = new Date();
+  const executionTime = (end - start);
+  Logger.log(`backupSpreadsheet execution time: ${executionTime} ms`);
 }
 
 // Helper function to delete older backups beyond the limit
