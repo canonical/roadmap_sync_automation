@@ -6,8 +6,8 @@ const FUTURE_CYCLE = "25.10"; //leave empty if not needed
 const JIRA_DATA_SPREADSHEET_ID = "1E_Qa5zCtI4JeiXKq0yW2KNzU9F1Q_Bt39FxVCxVMjZ4"; //Spreadsheet ID with Jira data for roadmap
 const CYCLE_REGEX_PATTERN = /^\d{2}\.\d{2}$/; //regex pattern for cycles
 const PROJECT_REGEX_PATTERN = /^(.*?)\((.*?)\)\[(.*?)\]$|^(.*?)\[(.*?)\]\((.*?)\)$|^(.*?)\((.*?)\)$|^(.*?)\[(.*?)\]$|^(.*?)$/; // regex pattern for project filter
-const BACKUP_FOLDER_ID = "10TXVDrdGcvQjmvjf5u0m8Lzj2vYObvXP"; //from the URL e.g. https://drive.google.com/drive/folders/**FOLDER_ID**
-const MAX_BACKUPS_COUNT = 10;
+const BACKUP_FOLDER_ID = "1B37pAPfBXAsTlSD3azt4FY-mrNhaa3jT"; //from the URL e.g. https://drive.google.com/drive/folders/**FOLDER_ID**
+const MAX_BACKUPS_COUNT = 360;
 
 const WHITE_STATUSES = ["Untriaged", "Triaged"] //not started statuses
 const GREEN_STATUSES = ["In Progress", "In Review", "To Be Deployed", "BLOCKED"] // statuses that green by default, if roadmap state is empty
@@ -40,7 +40,7 @@ function main() {
   }
   generateIndexSheet(ss);
 }
-//time based fucntion for trigger
+//time based fucntion for scheduled run
 function syncCurrentCycle() {
   //create backup of the spreadsheet
   backupSpreadsheet(BACKUP_FOLDER_ID, MAX_BACKUPS_COUNT)
@@ -51,7 +51,7 @@ function syncCurrentCycle() {
   generateIndexSheet(ss);
 }
 
-//time based fucntion for trigger
+//time based fucntion for scheduled run
 function syncFutureCycle() {
   if (FUTURE_CYCLE) {
     //create backup of the spreadsheet
@@ -277,7 +277,7 @@ function processProject(cycleNumber, projectFilter, sheet, row_index, projectCol
   }
   const end = new Date();
   const executionTime = end - start
-  Logger.log(`processProject execution time: ${executionTime} ms`);
+  //Logger.log(`processProject execution time: ${executionTime} ms`);
   return row_index;
 }
 
@@ -364,7 +364,7 @@ function getProjectIssuesInHierarchy(projectFilter, cycleNumber) {
   }
   const end = new Date();
   const executionTime = end - start
-  Logger.log(`getProjectIssuesInHierarchy() execution time: ${executionTime} ms`);
+  //Logger.log(`getProjectIssuesInHierarchy() execution time: ${executionTime} ms`);
 
   return hierarchy
 }

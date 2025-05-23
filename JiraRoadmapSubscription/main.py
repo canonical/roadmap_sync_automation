@@ -16,9 +16,9 @@ JIRA_JQL = ("\"Properties[Checkboxes]\" = \"Roadmap Item\" "
 JIRA_API_ENDPOINT = f"{JIRA_URL}/rest/api/latest/search"
 
 # Email Configuration
-SMTP_SERVER = "smtp.example.com"
+SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 587
-EMAIL_SENDER = "your-email@example.com"
+EMAIL_SENDER = "anton.vishnevskii@canonical.com"
 EMAIL_PASSWORD = "your-email-password"
 EMAIL_RECIPIENT = "recipient@example.com"
 
