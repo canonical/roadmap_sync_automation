@@ -1,7 +1,8 @@
+//sheet names that should be processed
 const SHEETS = ["cloud", "charming", "saas", "devices", "is", "product", "security", "excellence", "ubuntu", "web"];
-//const SHEETS = ["cloud"]; //sheet names that should be processed
-const CURRENT_CYCLE = "25.04"; //current cycle
-const FUTURE_CYCLE = "25.10"; //leave empty if not needed
+//const SHEETS = ["ubuntu"]; 
+const CURRENT_CYCLE = "25.10"; //current cycle
+const FUTURE_CYCLE = "26.04"; //can be left empty if not applicable.
 
 const JIRA_DATA_SPREADSHEET_ID = "1E_Qa5zCtI4JeiXKq0yW2KNzU9F1Q_Bt39FxVCxVMjZ4"; //Spreadsheet ID with Jira data for roadmap
 const CYCLE_REGEX_PATTERN = /^\d{2}\.\d{2}$/; //regex pattern for cycles
@@ -15,10 +16,14 @@ const RED_STATUSES = ["Rejected"] // statuses that red by default, if roadmap st
 const COMPLETED_STATUSES = ["Done"] // C value in the color state
 
 const STATE_COLORS = {
-  "At Risk": "orange",
-  "Excluded": "red",
-  "Added": "blue",
-  "Dropped": "black"
+  "At Risk": "#e59138",        // Custom orange
+  "Excluded": "#cc0000",       // Dark Red 1
+  "Added": "#3d85c6",          // Dark Blue 1
+  "Dropped": "#000000",        // Black
+  "green": "#6aa84f",          // Dark Green 1
+  "purple": "#741b47",         // Dark Magenta 2
+  "red": "#cc0000",            // Dark Red 1
+  "white": "#ffffff"           // White
 };
 
 const PROJECT_ROW_INDEX = 2; //row index with projects keys
@@ -134,6 +139,10 @@ function processSheet(ss, sheet, cycleNumber, withColorUpdate) {
 
       projects.forEach(projectKey => {
 
+        if (isNullOrWhitespace(projectKey)) {
+          return
+        }
+
         let projectFilter = parseProjectFilterValue(projectKey);
 
         if (projectFilter) {
@@ -206,6 +215,7 @@ function processProject(cycleNumber, projectFilter, sheet, row_index, projectCol
       sheet.getRange(row_index, projectColumnIndex + 3).setRichTextValue(richText);
 
       row_index++;
+      //Logger.log("Row index: " + row_index + " Last Cycle Row: " + lastCycleRow)
       if (row_index >= lastCycleRow - 1) {
         sheet.insertRowAfter(row_index)
       }
@@ -224,28 +234,28 @@ function processProject(cycleNumber, projectFilter, sheet, row_index, projectCol
         let labels_count_value = labelsarr.length > 1 ? labelsarr.length : ""
         carryOverCell.setValue(labels_count_value);
         if (labelsarr.length > 1) {
-          carryOverCell.setFontColor('white').setFontWeight('bold').setHorizontalAlignment("center");
-          carryOverCell.setBackground("purple");
+          carryOverCell.setFontColor(STATE_COLORS['white']).setFontWeight('bold').setHorizontalAlignment("center");
+          carryOverCell.setBackground(STATE_COLORS["purple"]);
         }
 
         //State
         let stateCell = sheet.getRange(row_index, projectColumnIndex + 1);
 
-        stateCell.setFontColor('white').setFontWeight('bold').setHorizontalAlignment("center");
-        let backgroundColor = "white"; // Default color
+        stateCell.setFontColor(STATE_COLORS['white']).setFontWeight('bold').setHorizontalAlignment("center");
+        let backgroundColor = STATE_COLORS["white"]; // Default color
 
         if (COMPLETED_STATUSES.includes(child.status)) {
           stateCell.setValue("C");
-          backgroundColor = "green"
+          backgroundColor = STATE_COLORS["green"]
         } else {
           if (child.state && STATE_COLORS[child.state]) {
             backgroundColor = STATE_COLORS[child.state];
           }
           else {
             if (GREEN_STATUSES.includes(child.status))
-              backgroundColor = "green";
+              backgroundColor = STATE_COLORS["green"];
             else if (RED_STATUSES.includes(child.status))
-              backgroundColor = "red";
+              backgroundColor = STATE_COLORS["red"];
           }
         }
         stateCell.setBackground(backgroundColor);
@@ -263,6 +273,7 @@ function processProject(cycleNumber, projectFilter, sheet, row_index, projectCol
       sheet.getRange(row_index, projectColumnIndex + 3).setRichTextValue(richText);
 
       row_index++;
+      //Logger.log("Row index: " + row_index + " Last Cycle Row: " + lastCycleRow)
       if (row_index >= lastCycleRow - 1) {
         sheet.insertRowAfter(row_index);
       }
@@ -271,6 +282,7 @@ function processProject(cycleNumber, projectFilter, sheet, row_index, projectCol
     sheet.getRange(row_index, projectColumnIndex, 1, 4).setValues([["", "", "", ""]])
 
     row_index++;
+    //Logger.log("Row index: " + row_index + " Last Cycle Row: " + lastCycleRow)
     if (row_index >= lastCycleRow - 1) {
       sheet.insertRowAfter(row_index);
     }
@@ -596,4 +608,8 @@ function generateIndexSheet(ss) {
   }
 
   Logger.log("Index sheet updated.");
+}
+
+function isNullOrWhitespace(str) {
+  return (str === null || str === undefined || str.trim() === '');
 }

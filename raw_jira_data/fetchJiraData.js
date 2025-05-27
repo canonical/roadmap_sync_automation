@@ -73,7 +73,7 @@ function main() {
       let nextPageToken = null;
 
       do {
-        const jqlQuery = encodeURIComponent(`"Properties[Checkboxes]" = "Roadmap Item" AND project = "${project}" AND issuetype = Epic AND labels = "${cycle}" ORDER BY parent ASC, key`);
+        const jqlQuery = encodeURIComponent(`"Properties[Checkboxes]" = "Roadmap Item" AND project = "${project}" AND issuetype = Epic AND labels = "${cycle}" ORDER BY Parent ASC, Rank`);
         let jiraUrl = `${jiraBaseUrl}/rest/api/3/search/jql?jql=${jqlQuery}&fields=key,summary,status,${ROADMAP_STATE_FIELD_ID},labels,parent,components&maxResults=${JIRA_API_BATCH_SIZE}`;
 
         if (nextPageToken) {
