@@ -1,12 +1,18 @@
 //sheet names that should be processed
 const SHEETS = ["cloud", "charming", "saas", "devices", "is", "product", "security", "excellence", "ubuntu", "web"];
-//const SHEETS = ["ubuntu"]; 
+const RELOAD_INDEX_SHEET = true; 
+const BACKUP_NEEDED = true;
+//const SHEETS = ["devices"];
+//const RELOAD_INDEX_SHEET = false;
+//const BACKUP_NEEDED = false;
+
 const CURRENT_CYCLE = "25.10"; //current cycle
 const FUTURE_CYCLE = "26.04"; //can be left empty if not applicable.
 
 const JIRA_DATA_SPREADSHEET_ID = "1E_Qa5zCtI4JeiXKq0yW2KNzU9F1Q_Bt39FxVCxVMjZ4"; //Spreadsheet ID with Jira data for roadmap
 const CYCLE_REGEX_PATTERN = /^\d{2}\.\d{2}$/; //regex pattern for cycles
 const PROJECT_REGEX_PATTERN = /^(.*?)\((.*?)\)\[(.*?)\]$|^(.*?)\[(.*?)\]\((.*?)\)$|^(.*?)\((.*?)\)$|^(.*?)\[(.*?)\]$|^(.*?)$/; // regex pattern for project filter
+
 const BACKUP_FOLDER_ID = "1B37pAPfBXAsTlSD3azt4FY-mrNhaa3jT"; //from the URL e.g. https://drive.google.com/drive/folders/**FOLDER_ID**
 const MAX_BACKUPS_COUNT = 360;
 
@@ -36,35 +42,16 @@ let raw_data_cache = {};
 //main function for manual run or for time based trigger
 function main() {
   //create backup of the spreadsheet
-  backupSpreadsheet(BACKUP_FOLDER_ID, MAX_BACKUPS_COUNT)
+  if (BACKUP_NEEDED) {
+    backupSpreadsheet(BACKUP_FOLDER_ID, MAX_BACKUPS_COUNT)
+  }
 
   let ss = SpreadsheetApp.getActiveSpreadsheet();
   processSheets(ss, CURRENT_CYCLE, true);
   if (FUTURE_CYCLE) {
     processSheets(ss, FUTURE_CYCLE, false);
   }
-  generateIndexSheet(ss);
-}
-//time based fucntion for scheduled run
-function syncCurrentCycle() {
-  //create backup of the spreadsheet
-  backupSpreadsheet(BACKUP_FOLDER_ID, MAX_BACKUPS_COUNT)
-
-  let ss = SpreadsheetApp.getActiveSpreadsheet();
-  processSheets(ss, CURRENT_CYCLE, true);
-
-  generateIndexSheet(ss);
-}
-
-//time based fucntion for scheduled run
-function syncFutureCycle() {
-  if (FUTURE_CYCLE) {
-    //create backup of the spreadsheet
-    backupSpreadsheet(BACKUP_FOLDER_ID, MAX_BACKUPS_COUNT)
-
-    let ss = SpreadsheetApp.getActiveSpreadsheet();
-
-    processSheets(ss, FUTURE_CYCLE, false);
+  if (RELOAD_INDEX_SHEET) {
     generateIndexSheet(ss);
   }
 }
@@ -125,8 +112,6 @@ function processSheet(ss, sheet, cycleNumber, withColorUpdate) {
 
     while (projectValue) {
 
-      let projects = projectsStringCell.getValue().toString().split(";");
-
       //one time call. Needed for creation of the additional column
       //tempSheet.insertColumnAfter(currentColumnIndex+2)
 
@@ -137,25 +122,26 @@ function processSheet(ss, sheet, cycleNumber, withColorUpdate) {
 
       let row_index = currentRowIndex;
 
+      let projects = projectsStringCell.getValue().toString().split(";");
+      let projectFilters = []
       projects.forEach(projectKey => {
-
         if (isNullOrWhitespace(projectKey)) {
           return
         }
-
         let projectFilter = parseProjectFilterValue(projectKey);
-
         if (projectFilter) {
-          row_index = processProject(cycleNumber, projectFilter, tempSheet, row_index, currentColumnIndex, lastCycleRow, withColorUpdate)
-          if (row_index > maxRow) {
-            maxRow = row_index;
-          }
-          if (row_index > lastCycleRow)
-            lastCycleRow = row_index;
+          projectFilters.push(projectFilter);
         }
         else
           Logger.log(`Project filter ${projectKey} is invalid. Please check the format. It can be <project key>(<labels>)[<components>], <project key>[<components>](<labels>), <project key>(<labels>), <project key>[<components>] or just <project key>`)
       })
+
+      row_index = processProject(cycleNumber, projectFilters, tempSheet, row_index, currentColumnIndex, lastCycleRow, withColorUpdate)
+      if (row_index > maxRow) {
+        maxRow = row_index;
+      }
+      if (row_index > lastCycleRow)
+        lastCycleRow = row_index;
 
       tempSheet.autoResizeColumn(currentColumnIndex + 3)
       currentColumnIndex += 4;
@@ -192,14 +178,21 @@ function processSheet(ss, sheet, cycleNumber, withColorUpdate) {
   }
 }
 
-function processProject(cycleNumber, projectFilter, sheet, row_index, projectColumnIndex, lastCycleRow, withColorUpdate) {
+function processProject(cycleNumber, projectFilters, sheet, row_index, projectColumnIndex, lastCycleRow, withColorUpdate) {
   const start = new Date();
-  Logger.log(`Fetching data for project: ${projectFilter.projectKey}. Components: ${projectFilter.components} Labels: ${projectFilter.labels}`);
 
-  let projectData = getProjectIssuesInHierarchy(projectFilter, cycleNumber);
+  let projectData = getProjectIssuesInHierarchy(projectFilters, cycleNumber);
+  let itemsRowsCount = projectData.count
+  let currentRowsCount = lastCycleRow - row_index;
+  let howMany = itemsRowsCount - currentRowsCount
 
-  for (let parent in projectData) {
-    let issue = projectData[parent]
+  Logger.log("Row index: " + row_index + " Last Cycle Row: " + lastCycleRow + " Total Rows: " + itemsRowsCount + " currentRowsCount " + currentRowsCount + " howMany " + howMany)
+  if (itemsRowsCount > currentRowsCount) {
+    sheet.insertRowsBefore(lastCycleRow, howMany);
+  }
+
+  for (let parent in projectData.hierarchy) {
+    let issue = projectData.hierarchy[parent]
 
     if (parent != 'None') {
 
@@ -213,12 +206,7 @@ function processProject(cycleNumber, projectFilter, sheet, row_index, projectCol
         .setLinkUrl(parentLinkURL)
         .build();
       sheet.getRange(row_index, projectColumnIndex + 3).setRichTextValue(richText);
-
       row_index++;
-      //Logger.log("Row index: " + row_index + " Last Cycle Row: " + lastCycleRow)
-      if (row_index >= lastCycleRow - 1) {
-        sheet.insertRowAfter(row_index)
-      }
     }
 
     let childrens = issue.children
@@ -271,21 +259,11 @@ function processProject(cycleNumber, projectFilter, sheet, row_index, projectCol
         .build();
 
       sheet.getRange(row_index, projectColumnIndex + 3).setRichTextValue(richText);
-
       row_index++;
-      //Logger.log("Row index: " + row_index + " Last Cycle Row: " + lastCycleRow)
-      if (row_index >= lastCycleRow - 1) {
-        sheet.insertRowAfter(row_index);
-      }
     }
 
     sheet.getRange(row_index, projectColumnIndex, 1, 4).setValues([["", "", "", ""]])
-
     row_index++;
-    //Logger.log("Row index: " + row_index + " Last Cycle Row: " + lastCycleRow)
-    if (row_index >= lastCycleRow - 1) {
-      sheet.insertRowAfter(row_index);
-    }
   }
   const end = new Date();
   const executionTime = end - start
@@ -293,9 +271,10 @@ function processProject(cycleNumber, projectFilter, sheet, row_index, projectCol
   return row_index;
 }
 
-function getProjectIssuesInHierarchy(projectFilter, cycleNumber) {
+function getProjectIssuesInHierarchy(projectFilters, cycleNumber) {
   const start = new Date();
   let data;
+  let itemsCount = 0;
 
   if (cycleNumber in raw_data_cache) {
     data = raw_data_cache[cycleNumber]
@@ -308,77 +287,85 @@ function getProjectIssuesInHierarchy(projectFilter, cycleNumber) {
     raw_data_cache[cycleNumber] = data
   }
 
-
   let hierarchy = {};
 
-  for (let i = 1; i < data.length; i++) {
-    let row = data[i];
-    let project = row[0];
+  projectFilters.forEach(projectFilter => {
+    Logger.log(`Fetching data for project: ${projectFilter.projectKey}. Components: ${projectFilter.components} Labels: ${projectFilter.labels}`);
+    for (let i = 1; i < data.length; i++) {
+      let row = data[i];
+      let project = row[0];
 
-    if (project === projectFilter.projectKey) {
+      if (project === projectFilter.projectKey) {
 
-      let components = row[6];
-      if (projectFilter.components && projectFilter.components.length > 0) {
-        let include = false;
-        components.split(",").forEach(component => {
-          if (projectFilter.components.includes(component.trim())) {
-            include = true;
-          }
-        })
+        let components = row[6];
+        if (projectFilter.components && projectFilter.components.length > 0) {
+          let include = false;
+          components.split(",").forEach(component => {
+            if (projectFilter.components.includes(component.trim())) {
+              include = true;
+            }
+          })
 
-        if (!include)
-          continue;
+          if (!include)
+            continue;
+        }
+
+        let labels = row[5];
+        if (projectFilter.labels && projectFilter.labels.length > 0) {
+          let include = false;
+          labels.split(",").forEach(label => {
+            if (projectFilter.labels.includes(label.trim())) {
+              include = true;
+            }
+          })
+
+          if (!include)
+            continue;
+        }
+
+        let parentSummary = row[8];
+        let parentKey = row[7];
+        let parentLink = row[10]
+        let summary = row[2];
+        let key = row[1];
+        let epicLink = row[9]
+        let epicState = row[4]
+        let epicStatus = row[3]
+
+        if (!parentKey) {
+          parentKey = "None"
+        }
+        if (!hierarchy[parentKey]) {
+          hierarchy[parentKey] = {
+            key: parentKey,
+            summary: parentSummary,
+            parentLink: parentLink,
+            children: []
+          };
+          itemsCount += 2 //parent plus whitespace
+        }
+
+        hierarchy[parentKey].children.push({
+          key: key,
+          summary: summary,
+          epicLink: epicLink,
+          status: epicStatus,
+          state: epicState,
+          labels: labels
+        });
+        itemsCount += 1;
       }
-
-      let labels = row[5];
-      if (projectFilter.labels && projectFilter.labels.length > 0) {
-        let include = false;
-        labels.split(",").forEach(label => {
-          if (projectFilter.labels.includes(label.trim())) {
-            include = true;
-          }
-        })
-
-        if (!include)
-          continue;
-      }
-
-      let parentSummary = row[8];
-      let parentKey = row[7];
-      let parentLink = row[10]
-      let summary = row[2];
-      let key = row[1];
-      let epicLink = row[9]
-      let epicState = row[4]
-      let epicStatus = row[3]
-
-      if (!parentKey) {
-        parentKey = "None"
-      }
-      if (!hierarchy[parentKey]) {
-        hierarchy[parentKey] = {
-          key: parentKey,
-          summary: parentSummary,
-          parentLink: parentLink,
-          children: []
-        };
-      }
-
-      hierarchy[parentKey].children.push({
-        key: key,
-        summary: summary,
-        epicLink: epicLink,
-        status: epicStatus,
-        state: epicState,
-        labels: labels
-      });
     }
-  }
+  })
+
   const end = new Date();
   const executionTime = end - start
   //Logger.log(`getProjectIssuesInHierarchy() execution time: ${executionTime} ms`);
 
-  return hierarchy
+  return {
+    hierarchy: hierarchy,
+    count: itemsCount
+  };
 }
 
 function findCyclesOnTheSheet(sheet) {
