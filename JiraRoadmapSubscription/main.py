@@ -11,14 +11,15 @@ JIRA_USER = "anton.vishnevskii@canonical.com"
 JIRA_API_TOKEN = os.getenv("JIRA_API_TOKEN")
 JIRA_JQL = ("\"Properties[Checkboxes]\" = \"Roadmap Item\" "
             "AND issuetype = Epic "
-            "AND \"Roadmap State[Dropdown]\" IN (Excluded, \"At Risk\") "
+            "AND \"Roadmap State[Dropdown]\" IN (\"🟧 At Risk\",\"🟥 Excluded\") "
+            "AND labels IN (25.10) "
             "AND updated >= -7d")
 JIRA_API_ENDPOINT = f"{JIRA_URL}/rest/api/latest/search"
 
 # Email Configuration
 SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 587
-EMAIL_SENDER = "anton.vishnevskii@canonical.com"
+EMAIL_SENDER = "your-email@example.com"
 EMAIL_PASSWORD = "your-email-password"
 EMAIL_RECIPIENT = "recipient@example.com"
 
