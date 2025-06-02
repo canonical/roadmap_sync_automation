@@ -1,6 +1,6 @@
 //sheet names that should be processed
 const SHEETS = ["cloud", "charming", "saas", "devices", "is", "product", "security", "excellence", "ubuntu", "web"];
-const RELOAD_INDEX_SHEET = true; 
+const RELOAD_INDEX_SHEET = true;
 const BACKUP_NEEDED = true;
 //const SHEETS = ["devices"];
 //const RELOAD_INDEX_SHEET = false;
@@ -113,9 +113,9 @@ function processSheet(ss, sheet, cycleNumber, withColorUpdate) {
     while (projectValue) {
 
       //one time call. Needed for creation of the additional column
-      //tempSheet.insertColumnAfter(currentColumnIndex+2)
+      //tempSheet.insertColumnAfter(currentColumnIndex+3)
 
-      let projectsRange = tempSheet.getRange(currentRowIndex, currentColumnIndex, lastCycleRow - currentRowIndex, 4);
+      let projectsRange = tempSheet.getRange(currentRowIndex, currentColumnIndex, lastCycleRow - currentRowIndex, 5);
       projectsRange.clear();
       projectsRange.clearFormat();
       projectsRange.setWrapStrategy(SpreadsheetApp.WrapStrategy.CLIP);
@@ -143,9 +143,15 @@ function processSheet(ss, sheet, cycleNumber, withColorUpdate) {
       if (row_index > lastCycleRow)
         lastCycleRow = row_index;
 
+      tempSheet.setColumnWidth(currentColumnIndex, 25)
+      tempSheet.setColumnWidth(currentColumnIndex + 1, 25)
       tempSheet.autoResizeColumn(currentColumnIndex + 3)
-      currentColumnIndex += 4;
-      projectColumnIndex += 4;
+      const currentWidth = tempSheet.getColumnWidth(currentColumnIndex + 3);
+      tempSheet.setColumnWidth(currentColumnIndex + 3, currentWidth + 10);
+      tempSheet.setColumnWidth(currentColumnIndex + 4, 25)
+
+      currentColumnIndex += 5;
+      projectColumnIndex += 5;
       projectsStringCell = tempSheet.getRange(PROJECT_ROW_INDEX, projectColumnIndex);
       projectValue = projectsStringCell.getValue();
     }
@@ -182,11 +188,16 @@ function processProject(cycleNumber, projectFilters, sheet, row_index, projectCo
   const start = new Date();
 
   let projectData = getProjectIssuesInHierarchy(projectFilters, cycleNumber);
+
+  if (!projectData.hierarchy || projectData.hierarchy.length == 0) {
+    Logger.log("Jira Data is empty.")
+  }
+
   let itemsRowsCount = projectData.count
   let currentRowsCount = lastCycleRow - row_index;
   let howMany = itemsRowsCount - currentRowsCount
 
-  Logger.log("Row index: " + row_index + " Last Cycle Row: " + lastCycleRow + " Total Rows: " + itemsRowsCount + " currentRowsCount " + currentRowsCount + " howMany " + howMany)
+  //Logger.log("Row index: " + row_index + " Last Cycle Row: " + lastCycleRow + " Total Rows: " + itemsRowsCount + " currentRowsCount " + currentRowsCount + " howMany " + howMany)
   if (itemsRowsCount > currentRowsCount) {
     sheet.insertRowsBefore(lastCycleRow, howMany);
   }
@@ -206,6 +217,7 @@ function processProject(cycleNumber, projectFilters, sheet, row_index, projectCo
         .setLinkUrl(parentLinkURL)
         .build();
       sheet.getRange(row_index, projectColumnIndex + 3).setRichTextValue(richText);
+      sheet.getRange(row_index, projectColumnIndex + 4).setValue("");
       row_index++;
     }
 
@@ -259,10 +271,12 @@ function processProject(cycleNumber, projectFilters, sheet, row_index, projectCo
         .build();
 
       sheet.getRange(row_index, projectColumnIndex + 3).setRichTextValue(richText);
+
+      sheet.getRange(row_index, projectColumnIndex + 4).setValue("");
       row_index++;
     }
 
-    sheet.getRange(row_index, projectColumnIndex, 1, 4).setValues([["", "", "", ""]])
+    sheet.getRange(row_index, projectColumnIndex, 1, 5).setValues([["", "", "", "", ""]])
     row_index++;
   }
   const end = new Date();
@@ -276,7 +290,7 @@ function getProjectIssuesInHierarchy(projectFilters, cycleNumber) {
   let data;
   let itemsCount = 0;
 
-  if (cycleNumber in raw_data_cache) {
+  if (cycleNumber in raw_data_cache && raw_data_cache[cycleNumber].length > 0) {
     data = raw_data_cache[cycleNumber]
   }
   else {
