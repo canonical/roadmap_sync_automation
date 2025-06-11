@@ -143,12 +143,12 @@ function processSheet(ss, sheet, cycleNumber, withColorUpdate) {
       if (row_index > lastCycleRow)
         lastCycleRow = row_index;
 
-      tempSheet.setColumnWidth(currentColumnIndex, 25)
-      tempSheet.setColumnWidth(currentColumnIndex + 1, 25)
-      tempSheet.autoResizeColumn(currentColumnIndex + 3)
-      const currentWidth = tempSheet.getColumnWidth(currentColumnIndex + 3);
-      tempSheet.setColumnWidth(currentColumnIndex + 3, currentWidth + 10);
-      tempSheet.setColumnWidth(currentColumnIndex + 4, 25)
+      //tempSheet.setColumnWidth(currentColumnIndex, 25)
+      //tempSheet.setColumnWidth(currentColumnIndex + 1, 25)
+      //tempSheet.autoResizeColumn(currentColumnIndex + 3)
+      //const currentWidth = tempSheet.getColumnWidth(currentColumnIndex + 3);
+      //tempSheet.setColumnWidth(currentColumnIndex + 3, currentWidth + 10);
+      //tempSheet.setColumnWidth(currentColumnIndex + 4, 25)
 
       currentColumnIndex += 5;
       projectColumnIndex += 5;
