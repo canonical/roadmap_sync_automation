@@ -11,8 +11,39 @@ const LAST_SYNC_DATE_CELL = "B1" //cell on the config sheet to store the lst upd
 const JIRA_API_TOKEN_PROPERTY_NAME = "JIRA_API_TOKEN" //Api token saved in the script properties
 
 const ROADMAP_STATE_FIELD_ID = "customfield_10968" //id of the Roadmap State customfield in Jira. !!! check data processing section in case this id need to be changed
+const RANK_FIELD_ID = "customfield_10019"
 const JIRA_API_BATCH_SIZE = 100; // For Jira API limits
 const JIRA_API_SLEEP = 0; // For Jira API limits
+
+parentRanks = new Map()
+
+function fetchParentRank(parentKey, jiraBaseUrl, jiraEmail, jiraToken) {
+  const url = `${jiraBaseUrl}/rest/api/3/issue/${parentKey}?fields=customfield_10019`;
+  const options = {
+    method: "GET",
+    headers: {
+      Authorization: `Basic ${Utilities.base64Encode(jiraEmail + ":" + jiraToken)}`,
+      Accept: "application/json"
+    },
+    muteHttpExceptions: true
+  };
+
+  try {
+    const response = UrlFetchApp.fetch(url, options);
+    const data = JSON.parse(response.getContentText());
+
+    if (response.getResponseCode() !== 200 || !data.fields || !data.fields.customfield_10019) {
+      Logger.log(`Parent rank not found for ${parentKey}`);
+      return "";
+    }
+
+    return data.fields.customfield_10019;
+
+  } catch (e) {
+    Logger.log(`Error fetching rank for ${parentKey}: ${e.message}`);
+    return "";
+  }
+}
 
 function main() {
   const sheet = SpreadsheetApp.getActiveSpreadsheet();
@@ -74,7 +105,7 @@ function main() {
 
       do {
         const jqlQuery = encodeURIComponent(`"Properties[Checkboxes]" = "Roadmap Item" AND project = "${project}" AND issuetype = Epic AND labels = "${cycle}" ORDER BY Parent ASC, Rank`);
-        let jiraUrl = `${jiraBaseUrl}/rest/api/3/search/jql?jql=${jqlQuery}&fields=key,summary,status,${ROADMAP_STATE_FIELD_ID},labels,parent,components&maxResults=${JIRA_API_BATCH_SIZE}`;
+        let jiraUrl = `${jiraBaseUrl}/rest/api/3/search/jql?jql=${jqlQuery}&fields=key,summary,status,${ROADMAP_STATE_FIELD_ID},labels,parent,components,${RANK_FIELD_ID}&maxResults=${JIRA_API_BATCH_SIZE}`;
 
         if (nextPageToken) {
           jiraUrl += "&nextPageToken=" + nextPageToken;
@@ -119,6 +150,13 @@ function main() {
 
       } while (nextPageToken);
 
+      totalIssues.forEach(issue => {
+        const parentKey = issue.fields.parent?.key;
+        if (parentKey && !parentRanks.has(parentKey)) {
+          const parentRank = fetchParentRank(parentKey, jiraBaseUrl, jiraEmail, jiraToken);
+          parentRanks.set(parentKey, parentRank);
+        }
+      });
 
       // Process and append data
       const projectData = totalIssues.map(issue => [
@@ -132,8 +170,30 @@ function main() {
         issue.fields.parent ? issue.fields.parent.key : "",
         issue.fields.parent ? issue.fields.parent.fields.summary : "",
         jiraBaseUrl + '/browse/' + issue.key,
-        issue.fields.parent ? jiraBaseUrl + '/browse/' + issue.fields.parent.key : ""
+        issue.fields.parent ? jiraBaseUrl + '/browse/' + issue.fields.parent.key : "",
+        issue.fields.customfield_10019 ? issue.fields.customfield_10019 : "",
+        issue.fields.parent ? parentRanks.get(issue.fields.parent.key) : ""
       ]);
+
+      projectData.sort((a, b) => {
+        const parentKeyA = a[7]; // Parent Key
+        const parentKeyB = b[7];
+        const issueRankA = a[11]; // Issue Rank
+        const issueRankB = b[11];
+
+        const parentRankA = parentRanks.get(parentKeyA) || "";
+        const parentRankB = parentRanks.get(parentKeyB) || "";
+
+        // Compare parent rank first
+        if (parentRankA < parentRankB) return -1;
+        if (parentRankA > parentRankB) return 1;
+
+        // If parent ranks are equal, compare issue rank
+        if (issueRankA < issueRankB) return -1;
+        if (issueRankA > issueRankB) return 1;
+
+        return 0;
+      });
 
       allData = allData.concat(projectData);
     }
@@ -141,7 +201,7 @@ function main() {
     dataSheet.clear(); // Clear previous data
 
     // Define headers and write them to the sheet
-    const headers = ["Project Key", "Epic Key", "Summary", "Current Status", "Roadmap State", "Labels", "Components", "Parent Key", "Parent Summary", "Epic Link", "Parent Link"];
+    const headers = ["Project Key", "Epic Key", "Summary", "Current Status", "Roadmap State", "Labels", "Components", "Parent Key", "Parent Summary", "Epic Link", "Parent Link", "Issue Rank", "Parent Rank"];
     dataSheet.appendRow(headers);
 
     // Write all data at once for better performance
