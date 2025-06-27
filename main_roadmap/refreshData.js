@@ -232,7 +232,8 @@ function processProject(cycleNumber, projectFilters, sheet, row_index, projectCo
         let carryOverCell = sheet.getRange(row_index, projectColumnIndex);
         let labelsarr = findCyclesInTheLabel(child.labels, cycleNumber);
         let labels_count_value = labelsarr.length > 1 ? labelsarr.length - 1 : ""
-        carryOverCell.setValue(labels_count_value);
+        if (labels_count_value > 1)
+          carryOverCell.setValue(labels_count_value);
         if (labelsarr.length > 1) {
           carryOverCell.setFontColor(STATE_COLORS['white']).setFontWeight('bold').setHorizontalAlignment("center");
           carryOverCell.setBackground(STATE_COLORS["purple"]);
