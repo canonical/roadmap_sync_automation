@@ -45,8 +45,16 @@ function main() {
   if (BACKUP_NEEDED) {
     backupSpreadsheet(BACKUP_FOLDER_ID, MAX_BACKUPS_COUNT)
   }
-
   let ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  //remove all unfinished temp sheets
+  for (const sheetName of SHEETS) {
+    let sheet = ss.getSheetByName(sheetName + "_temp");
+    if (sheet) {
+      ss.deleteSheet(sheet);
+    }
+  }
+
   processSheets(ss, CURRENT_CYCLE, true);
   if (FUTURE_CYCLE) {
     processSheets(ss, FUTURE_CYCLE, false);
@@ -54,6 +62,13 @@ function main() {
   if (RELOAD_INDEX_SHEET) {
     generateIndexSheet(ss);
   }
+
+  //switch originals to temps
+  for (const sheetName of SHEETS) {
+    switchSheets(ss, sheetName, sheetName + "_temp")
+  }
+
+  switchSheets(ss, INDEX_SHEET_NAME, INDEX_SHEET_NAME + "_temp")
 }
 
 function processSheets(ss, cycleNumber, withColorUpdate) {
@@ -64,9 +79,6 @@ function processSheets(ss, cycleNumber, withColorUpdate) {
       continue;
     }
 
-    //copy original state of the sheet
-    copyAndHideSheet(ss, sheet, sheetName + "_original");
-
     Logger.log(`Fetching data for sheet: ${sheetName}. Cycle Number: ${cycleNumber}`);
     processSheet(ss, sheet, cycleNumber, withColorUpdate); //process the sheet
   }
@@ -76,7 +88,7 @@ function processSheet(ss, sheet, cycleNumber, withColorUpdate) {
 
   sheetName = sheet.getName();
   //create a copy of the sheet and hide it
-  let tempSheet = copyAndHideSheet(ss, sheet, sheetName + "_temp", true);
+  let tempSheet = copyAndHideSheet(ss, sheet, sheetName + "_temp");
 
   let cycles = findCyclesOnTheSheet(tempSheet); // get info about cycles numbers and their positions on the sheet
 
@@ -174,13 +186,6 @@ function processSheet(ss, sheet, cycleNumber, withColorUpdate) {
       let cycleRange = tempSheet.getRange(cycleRowIndex + 1, 1, maxRow - (cycleRowIndex + 1), 3)
       cycleRange.shiftRowGroupDepth(1);
     }
-
-    //switch the temp and original sheets
-    let position = getSheetPosition(ss, sheetName);
-    ss.deleteSheet(sheet);
-    tempSheet.setName(sheetName);
-    tempSheet.showSheet();
-    moveSheetToPosition(ss, sheetName, position)
   }
 }
 
@@ -247,17 +252,15 @@ function processProject(cycleNumber, projectFilters, sheet, row_index, projectCo
 
         if (COMPLETED_STATUSES.includes(child.status)) {
           stateCell.setValue("C");
-          backgroundColor = STATE_COLORS["green"]
-        } else {
-          if (child.state && STATE_COLORS[child.state]) {
-            backgroundColor = STATE_COLORS[child.state];
-          }
-          else {
-            if (GREEN_STATUSES.includes(child.status))
-              backgroundColor = STATE_COLORS["green"];
-            else if (RED_STATUSES.includes(child.status))
-              backgroundColor = STATE_COLORS["red"];
-          }
+          backgroundColor = (child.state === "Added")
+            ? STATE_COLORS["Added"]
+            : STATE_COLORS["green"];
+        } else if (child.state && STATE_COLORS[child.state]) {
+          backgroundColor = STATE_COLORS[child.state];
+        } else if (GREEN_STATUSES.includes(child.status)) {
+          backgroundColor = STATE_COLORS["green"];
+        } else if (RED_STATUSES.includes(child.status)) {
+          backgroundColor = STATE_COLORS["red"];
         }
         stateCell.setBackground(backgroundColor);
       }
@@ -570,17 +573,17 @@ function generateIndexSheet(ss) {
   // Get or create the Index sheet
   let indexSheet = ss.getSheetByName(INDEX_SHEET_NAME);
 
-  copyAndHideSheet(ss, indexSheet, indexSheet.getName() + "_original")
+  let tempIndexSheet = copyAndHideSheet(ss, indexSheet, indexSheet.getName() + "_temp", true)
 
-  for (let i = 1; i <= indexSheet.getLastColumn(); i++) {
-    sheetName = indexSheet.getRange(1, i).getValue().toLowerCase()
+  for (let i = 1; i <= tempIndexSheet.getLastColumn(); i++) {
+    sheetName = tempIndexSheet.getRange(1, i).getValue().toLowerCase()
     //Logger.log("Sheet Name: " + sheetName)
-    indexSheet.getRange(3, i, indexSheet.getLastRow(), 1).clear({
+    tempIndexSheet.getRange(3, i, tempIndexSheet.getLastRow(), 1).clear({
       contentsOnly: true,
       formatOnly: false
     });
 
-    targetSheet = ss.getSheetByName(sheetName);
+    targetSheet = ss.getSheetByName(sheetName + "_temp");
     if (targetSheet) {
       const targetSheetId = targetSheet.getSheetId();
 
@@ -602,7 +605,7 @@ function generateIndexSheet(ss) {
             .setLinkUrl(url)
             .build();
 
-          indexSheet.getRange(rowIndex, i).setRichTextValue(richText);
+          tempIndexSheet.getRange(rowIndex, i).setRichTextValue(richText);
           rowIndex += 1;
         }
       }
@@ -610,6 +613,17 @@ function generateIndexSheet(ss) {
   }
 
   Logger.log("Index sheet updated.");
+}
+
+function switchSheets(ss, sheetName, tempSheetName) {
+  Logger.log(`Sheet ${sheetName} will be switched to ${tempSheetName}.`);
+  const sheet = ss.getSheetByName(sheetName);
+  let tempSheet = ss.getSheetByName(tempSheetName)
+  let position = getSheetPosition(ss, sheetName);
+  ss.deleteSheet(sheet);
+  tempSheet.setName(sheetName);
+  tempSheet.showSheet();
+  moveSheetToPosition(ss, sheetName, position)
 }
 
 function isNullOrWhitespace(str) {
