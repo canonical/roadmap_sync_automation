@@ -17,34 +17,6 @@ const JIRA_API_SLEEP = 0; // For Jira API limits
 
 parentRanks = new Map()
 
-function fetchParentRank(parentKey, jiraBaseUrl, jiraEmail, jiraToken) {
-  const url = `${jiraBaseUrl}/rest/api/3/issue/${parentKey}?fields=customfield_10019`;
-  const options = {
-    method: "GET",
-    headers: {
-      Authorization: `Basic ${Utilities.base64Encode(jiraEmail + ":" + jiraToken)}`,
-      Accept: "application/json"
-    },
-    muteHttpExceptions: true
-  };
-
-  try {
-    const response = UrlFetchApp.fetch(url, options);
-    const data = JSON.parse(response.getContentText());
-
-    if (response.getResponseCode() !== 200 || !data.fields || !data.fields.customfield_10019) {
-      Logger.log(`Parent rank not found for ${parentKey}`);
-      return "";
-    }
-
-    return data.fields.customfield_10019;
-
-  } catch (e) {
-    Logger.log(`Error fetching rank for ${parentKey}: ${e.message}`);
-    return "";
-  }
-}
-
 function main() {
   const sheet = SpreadsheetApp.getActiveSpreadsheet();
   const configSheet = sheet.getSheetByName(CONFIG_SHEET_NAME);
@@ -215,6 +187,34 @@ function main() {
   const lastSyncDate = new Date();
   configSheet.getRange(LAST_SYNC_DATE_CELL).setValue(lastSyncDate);
   Logger.log(`Data updated successfully. Last Sync: ${lastSyncDate}`);
+}
+
+function fetchParentRank(parentKey, jiraBaseUrl, jiraEmail, jiraToken) {
+  const url = `${jiraBaseUrl}/rest/api/3/issue/${parentKey}?fields=customfield_10019`;
+  const options = {
+    method: "GET",
+    headers: {
+      Authorization: `Basic ${Utilities.base64Encode(jiraEmail + ":" + jiraToken)}`,
+      Accept: "application/json"
+    },
+    muteHttpExceptions: true
+  };
+
+  try {
+    const response = UrlFetchApp.fetch(url, options);
+    const data = JSON.parse(response.getContentText());
+
+    if (response.getResponseCode() !== 200 || !data.fields || !data.fields.customfield_10019) {
+      Logger.log(`Parent rank not found for ${parentKey}`);
+      return "";
+    }
+
+    return data.fields.customfield_10019;
+
+  } catch (e) {
+    Logger.log(`Error fetching rank for ${parentKey}: ${e.message}`);
+    return "";
+  }
 }
 
 function getComponentsString(components) {

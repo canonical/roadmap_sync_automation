@@ -2,6 +2,7 @@
 const SHEETS = ["cloud", "charming", "saas", "devices", "is", "product", "security", "excellence", "ubuntu", "web"];
 const RELOAD_INDEX_SHEET = true;
 const BACKUP_NEEDED = true;
+const EXECUTION_FREQUENCY_IN_HOURS = 4
 //const SHEETS = ["devices"];
 //const RELOAD_INDEX_SHEET = false;
 //const BACKUP_NEEDED = false;
@@ -31,16 +32,39 @@ const STATE_COLORS = {
   "red": "#cc0000",            // Dark Red 1
   "white": "#ffffff"           // White
 };
+const FONT_FAMILY = "Ubuntu";
 
 const PROJECT_ROW_INDEX = 2; //row index with projects keys
 const ALL_CYCLES_COLUMN_INDEX = 1; //column index with all cycles
 
 const INDEX_SHEET_NAME = "index";
 
+const CONTACT_LINK = "https://chat.canonical.com/canonical/channels/jira"
+const DOC_LINK = "https://docs.google.com/document/d/1_Cjvi3gjZ6xsdkodkan3fMCoaSbDH1GgUdy5jzQGq5U/edit?tab=t.0"
+
+
 let raw_data_cache = {};
 
 //main function for manual run or for time based trigger
 function main() {
+  const propService = PropertiesService.getScriptProperties();
+  const lastExecutionTime = propService.getProperty('last_execution');
+  const currentTime = new Date();
+
+  if (lastExecutionTime) {
+    const hoursInMillis = EXECUTION_FREQUENCY_IN_HOURS * 60 * 60 * 1000;
+    const lastExecutionDate = new Date(lastExecutionTime);
+    const timeSinceLastExecution = currentTime.getTime() - (lastExecutionDate.getTime() - (5 * 60 * 1000));//fix the shift
+
+    if (timeSinceLastExecution < hoursInMillis) {
+      Logger.log(`Last execution was less than ${EXECUTION_FREQUENCY_IN_HOURS} hours ago.`);
+      Logger.log(`Last run: ${lastExecutionDate.toISOString()}`);
+      Logger.log(`Current time: ${currentTime.toISOString()}`);
+      Logger.log(`TimeSinceLastExecution in ms: ${timeSinceLastExecution}`)
+      return;
+    }
+  }
+
   //create backup of the spreadsheet
   if (BACKUP_NEEDED) {
     backupSpreadsheet(BACKUP_FOLDER_ID, MAX_BACKUPS_COUNT)
@@ -60,7 +84,7 @@ function main() {
     processSheets(ss, FUTURE_CYCLE, false);
   }
   if (RELOAD_INDEX_SHEET) {
-    generateIndexSheet(ss);
+    generateIndexSheet(ss, currentTime);
   }
 
   //switch originals to temps
@@ -69,6 +93,9 @@ function main() {
   }
 
   switchSheets(ss, INDEX_SHEET_NAME, INDEX_SHEET_NAME + "_temp")
+
+  Logger.log("Running script at: " + currentTime.toISOString());
+  propService.setProperty('last_execution', currentTime.toISOString());
 }
 
 function processSheets(ss, cycleNumber, withColorUpdate) {
@@ -123,7 +150,7 @@ function processSheet(ss, sheet, cycleNumber, withColorUpdate) {
     }
 
     while (projectValue) {
-
+      Logger.log(`Processing the ${projectValue}.`);
       //one time call. Needed for creation of the additional column
       //tempSheet.insertColumnAfter(currentColumnIndex+3)
 
@@ -215,14 +242,14 @@ function processProject(cycleNumber, projectFilters, sheet, row_index, projectCo
       //Summary
       let parentLinkURL = issue.parentLink;
 
-      sheet.getRange(row_index, projectColumnIndex, 1, 4).setValues([["", "", issue.summary, issue.key]]).setFontWeight("bold");
+      sheet.getRange(row_index, projectColumnIndex, 1, 4).setValues([["", "", issue.summary, issue.key]]).setFontWeight("bold").setFontFamily(FONT_FAMILY);
 
       const richText = SpreadsheetApp.newRichTextValue()
         .setText(issue.key)
         .setLinkUrl(parentLinkURL)
         .build();
-      sheet.getRange(row_index, projectColumnIndex + 3).setRichTextValue(richText);
-      sheet.getRange(row_index, projectColumnIndex + 4).setValue("");
+      sheet.getRange(row_index, projectColumnIndex + 3).setRichTextValue(richText).setFontFamily(FONT_FAMILY);
+      sheet.getRange(row_index, projectColumnIndex + 4).setValue("").setFontFamily(FONT_FAMILY);
       row_index++;
     }
 
@@ -240,14 +267,14 @@ function processProject(cycleNumber, projectFilters, sheet, row_index, projectCo
         if (labels_count_value > 1)
           carryOverCell.setValue(labels_count_value);
         if (labelsarr.length > 1) {
-          carryOverCell.setFontColor(STATE_COLORS['white']).setFontWeight('bold').setHorizontalAlignment("center");
+          carryOverCell.setFontColor(STATE_COLORS['white']).setFontWeight('bold').setHorizontalAlignment("center").setFontFamily(FONT_FAMILY);
           carryOverCell.setBackground(STATE_COLORS["purple"]);
         }
 
         //State
         let stateCell = sheet.getRange(row_index, projectColumnIndex + 1);
 
-        stateCell.setFontColor(STATE_COLORS['white']).setFontWeight('bold').setHorizontalAlignment("center");
+        stateCell.setFontColor(STATE_COLORS['white']).setFontWeight('bold').setHorizontalAlignment("center").setFontFamily(FONT_FAMILY);
         let backgroundColor = STATE_COLORS["white"]; // Default color
 
         if (COMPLETED_STATUSES.includes(child.status)) {
@@ -268,29 +295,29 @@ function processProject(cycleNumber, projectFilters, sheet, row_index, projectCo
       //Summary
       let epicLinkURL = child.epicLink;
 
-      sheet.getRange(row_index, projectColumnIndex + 2).setValue(child.summary)
+      sheet.getRange(row_index, projectColumnIndex + 2).setValue(child.summary).setFontFamily(FONT_FAMILY)
       const richText = SpreadsheetApp.newRichTextValue()
         .setText(child.key)
         .setLinkUrl(epicLinkURL)
         .build();
 
-      sheet.getRange(row_index, projectColumnIndex + 3).setRichTextValue(richText);
+      sheet.getRange(row_index, projectColumnIndex + 3).setRichTextValue(richText).setFontFamily(FONT_FAMILY);
 
-      sheet.getRange(row_index, projectColumnIndex + 4).setValue("");
+      sheet.getRange(row_index, projectColumnIndex + 4).setValue("").setFontFamily(FONT_FAMILY);
       row_index++;
     }
 
-    sheet.getRange(row_index, projectColumnIndex, 1, 5).setValues([["", "", "", "", ""]])
+    sheet.getRange(row_index, projectColumnIndex, 1, 5).setValues([["", "", "", "", ""]]).setFontFamily(FONT_FAMILY)
     row_index++;
   }
   const end = new Date();
   const executionTime = end - start
-  //Logger.log(`processProject execution time: ${executionTime} ms`);
+  Logger.log(`processProject execution time: ${executionTime} ms`);
   return row_index;
 }
 
 function getProjectIssuesInHierarchy(projectFilters, cycleNumber) {
-  const start = new Date();
+  //const start = new Date();
   let data;
   let itemsCount = 0;
 
@@ -376,8 +403,8 @@ function getProjectIssuesInHierarchy(projectFilters, cycleNumber) {
     }
   })
 
-  const end = new Date();
-  const executionTime = end - start
+  //const end = new Date();
+  //const executionTime = end - start
   //Logger.log(`getProjectIssuesInHierarchy() execution time: ${executionTime} ms`);
 
   return {
@@ -564,10 +591,11 @@ function copyAndHideSheet(ss, source_sheet, target_sheetName, deleteIfExists = f
   let tempSheet = source_sheet.copyTo(ss);
   tempSheet.setName(target_sheetName);
   tempSheet.hideSheet()
+  Logger.log(`Temp sheet has been created: ${target_sheetName}`);
   return tempSheet;
 }
 
-function generateIndexSheet(ss) {
+function generateIndexSheet(ss, lastExecutionTime) {
 
   Logger.log("Index sheet generation started.");
   // Get or create the Index sheet
@@ -612,6 +640,32 @@ function generateIndexSheet(ss) {
     }
   }
 
+  if (lastExecutionTime) {
+    const lastRow = 16;
+    const lastExecutionDate = new Date(lastExecutionTime);
+
+    const infoText = `Updated every: ${EXECUTION_FREQUENCY_IN_HOURS} hours | Last updated on: ${lastExecutionDate.toISOString()} (UTC) | Link to documentation: PR030 | Contact: JIRA`;
+
+    const richTextBuilder = SpreadsheetApp.newRichTextValue()
+      .setText(infoText);
+
+    const docLinkText = "PR030";
+    const docStartIndex = infoText.indexOf(docLinkText);
+    const docEndIndex = docStartIndex + docLinkText.length;
+    richTextBuilder.setLinkUrl(docStartIndex, docEndIndex, DOC_LINK);
+
+    const contactLinkText = "JIRA";
+    const contactStartIndex = infoText.indexOf(contactLinkText);
+    const contactEndIndex = contactStartIndex + contactLinkText.length;
+    richTextBuilder.setLinkUrl(contactStartIndex, contactEndIndex, CONTACT_LINK);
+
+    // Set the RichTextValue to the cell
+    const range = tempIndexSheet.getRange(lastRow, 1);
+    range.clearFormat();
+    range.setWrap(false);
+    range.setRichTextValue(richTextBuilder.build());
+  }
+
   Logger.log("Index sheet updated.");
 }
 
@@ -625,6 +679,7 @@ function switchSheets(ss, sheetName, tempSheetName) {
   tempSheet.showSheet();
   moveSheetToPosition(ss, sheetName, position)
 }
+
 
 function isNullOrWhitespace(str) {
   return (str === null || str === undefined || str.trim() === '');
