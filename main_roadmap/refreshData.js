@@ -317,68 +317,75 @@ function processProject(cycleNumber, projectFilters, sheet, row_index, projectCo
 }
 
 function getProjectIssuesInHierarchy(projectFilters, cycleNumber) {
-  //const start = new Date();
   let data;
   let itemsCount = 0;
 
   if (cycleNumber in raw_data_cache && raw_data_cache[cycleNumber].length > 0) {
-    data = raw_data_cache[cycleNumber]
-  }
-  else {
+    data = raw_data_cache[cycleNumber];
+  } else {
     let sheetName = cycleNumber + "_data";
     let externalSpreadsheet = SpreadsheetApp.openById(JIRA_DATA_SPREADSHEET_ID);
     let sheet = externalSpreadsheet.getSheetByName(sheetName);
-    data = sheet.getDataRange().getValues()
-    raw_data_cache[cycleNumber] = data
+    data = sheet.getDataRange().getValues();
+    raw_data_cache[cycleNumber] = data;
   }
 
   let hierarchy = {};
 
   projectFilters.forEach(projectFilter => {
-    Logger.log(`Fetching data for project: ${projectFilter.projectKey}. Components: ${projectFilter.components} Labels: ${projectFilter.labels}`);
+    Logger.log(`Fetching data for project: ${projectFilter.projectKey}. Components: ${projectFilter.components} Excluded Components: ${projectFilter.excludedComponents} Labels: ${projectFilter.labels}`);
     for (let i = 1; i < data.length; i++) {
       let row = data[i];
       let project = row[0];
 
       if (project === projectFilter.projectKey) {
-
         let components = row[6];
+        let include = true;
+
+        // Include components logic
         if (projectFilter.components && projectFilter.components.length > 0) {
-          let include = false;
+          include = false;
           components.split(",").forEach(component => {
             if (projectFilter.components.includes(component.trim())) {
               include = true;
             }
-          })
-
-          if (!include)
-            continue;
+          });
         }
+
+        // Exclude components logic
+        if (projectFilter.excludedComponents && projectFilter.excludedComponents.length > 0) {
+          components.split(",").forEach(component => {
+            if (projectFilter.excludedComponents.includes(component.trim())) {
+              include = false;
+            }
+          });
+        }
+
+        if (!include) continue;
 
         let labels = row[5];
         if (projectFilter.labels && projectFilter.labels.length > 0) {
-          let include = false;
+          let labelInclude = false;
           labels.split(",").forEach(label => {
             if (projectFilter.labels.includes(label.trim())) {
-              include = true;
+              labelInclude = true;
             }
-          })
+          });
 
-          if (!include)
-            continue;
+          if (!labelInclude) continue;
         }
 
         let parentSummary = row[8];
         let parentKey = row[7];
-        let parentLink = row[10]
+        let parentLink = row[10];
         let summary = row[2];
         let key = row[1];
-        let epicLink = row[9]
-        let epicState = row[4]
-        let epicStatus = row[3]
+        let epicLink = row[9];
+        let epicState = row[4];
+        let epicStatus = row[3];
 
         if (!parentKey) {
-          parentKey = "None"
+          parentKey = "None";
         }
         if (!hierarchy[parentKey]) {
           hierarchy[parentKey] = {
@@ -387,7 +394,7 @@ function getProjectIssuesInHierarchy(projectFilters, cycleNumber) {
             parentLink: parentLink,
             children: []
           };
-          itemsCount += 2 //parent plus whitespace
+          itemsCount += 2; // Parent plus whitespace
         }
 
         hierarchy[parentKey].children.push({
@@ -401,11 +408,7 @@ function getProjectIssuesInHierarchy(projectFilters, cycleNumber) {
         itemsCount += 1;
       }
     }
-  })
-
-  //const end = new Date();
-  //const executionTime = end - start
-  //Logger.log(`getProjectIssuesInHierarchy() execution time: ${executionTime} ms`);
+  });
 
   return {
     hierarchy: hierarchy,
@@ -518,6 +521,7 @@ function parseProjectFilterValue(value) {
   let projectKey = "";
   let labels = [];
   let components = [];
+  let excludedComponents = [];
 
   function parseValues(valueString) {
     if (!valueString) return [];
@@ -530,17 +534,20 @@ function parseProjectFilterValue(value) {
   if (match[1]) { // Format: <project key>(<labels>)[<components>]
     projectKey = match[1].trim();
     labels = parseValues(match[2]);
-    components = parseValues(match[3]);
+    components = parseValues(match[3]).filter(c => !c.startsWith("!"));
+    excludedComponents = parseValues(match[3]).filter(c => c.startsWith("!")).map(c => c.substring(1));
   } else if (match[4]) { // Format: <project key>[<components>](<labels>)
     projectKey = match[4].trim();
-    components = parseValues(match[5]);
+    components = parseValues(match[5]).filter(c => !c.startsWith("!"));
+    excludedComponents = parseValues(match[5]).filter(c => c.startsWith("!")).map(c => c.substring(1));
     labels = parseValues(match[6]);
   } else if (match[7]) { // Format: <project key>(<labels>)
     projectKey = match[7].trim();
     labels = parseValues(match[8]);
   } else if (match[9]) { // Format: <project key>[<components>]
     projectKey = match[9].trim();
-    components = parseValues(match[10]);
+    components = parseValues(match[10]).filter(c => !c.startsWith("!"));
+    excludedComponents = parseValues(match[10]).filter(c => c.startsWith("!")).map(c => c.substring(1));
   } else { // Format: <project key> (Only project key)
     projectKey = match[11].trim();
   }
@@ -548,6 +555,7 @@ function parseProjectFilterValue(value) {
   return {
     projectKey,
     components,
+    excludedComponents,
     labels
   };
 }
