@@ -2,13 +2,14 @@
 const SHEETS = ["cloud", "charming", "saas", "devices", "is", "product", "security", "excellence", "ubuntu", "web"];
 const RELOAD_INDEX_SHEET = true;
 const BACKUP_NEEDED = true;
-const EXECUTION_FREQUENCY_IN_HOURS = 12
+const frequency = PropertiesService.getScriptProperties().getProperty("EXECUTION_FREQUENCY_IN_HOURS");
+const EXECUTION_FREQUENCY_IN_HOURS = frequency ? parseInt(frequency, 10) : 12; // default to 12 if missing
 //const SHEETS = ["devices"];
 //const RELOAD_INDEX_SHEET = false;
 //const BACKUP_NEEDED = false;
 
-const CURRENT_CYCLE = "25.10"; //current cycle
-const FUTURE_CYCLE = "26.04"; //can be left empty if not applicable.
+const CURRENT_CYCLE = PropertiesService.getScriptProperties().getProperty("CURRENT_CYCLE"); //current cycle
+const FUTURE_CYCLE = PropertiesService.getScriptProperties().getProperty("FUTURE_CYCLE"); //can be left empty if not applicable.
 
 const JIRA_DATA_SPREADSHEET_ID = "1E_Qa5zCtI4JeiXKq0yW2KNzU9F1Q_Bt39FxVCxVMjZ4"; //Spreadsheet ID with Jira data for roadmap
 const CYCLE_REGEX_PATTERN = /^\d{2}\.\d{2}$/; //regex pattern for cycles
