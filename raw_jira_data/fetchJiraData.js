@@ -15,6 +15,8 @@ const RANK_FIELD_ID = "customfield_10019"
 const JIRA_API_BATCH_SIZE = 100; // For Jira API limits
 const JIRA_API_SLEEP = 0; // For Jira API limits
 
+const JSON_FOLDER_ID = "1DJDyuclwfrK_mdr2lIpssIHaxSknC04L"
+
 parentRanks = new Map()
 
 function main() {
@@ -179,6 +181,11 @@ function main() {
     // Write all data at once for better performance
     if (allData.length > 0) {
       dataSheet.getRange(2, 1, allData.length, headers.length).setValues(allData);
+
+      // Prepare JSON data from allData
+      const jsonData = prepareJsonData(allData);
+      //Save data as a json in folder
+      saveDataAsJson(cycle, jsonData, JSON_FOLDER_ID);
     }
 
   }
@@ -226,4 +233,38 @@ function getComponentsString(components) {
   }
 
   return result.join(", ");
+}
+
+function prepareJsonData(allData) {
+  return allData.map(row => ({
+    project: row[0],          // Project Key
+    key: row[1],              // Epic Key
+    summary: row[2],          // Summary
+    status: row[3],           // Current Status
+    roadmapState: row[4],     // Roadmap State
+    labels: row[5],           // Labels
+    components: row[6],       // Components
+    parentKey: row[7],        // Parent Key
+    parentSummary: row[8],    // Parent Summary
+    epicLink: row[9],         // Epic Link
+    parentLink: row[10],      // Parent Link
+    issueRank: row[11],       // Issue Rank
+    parentRank: row[12]       // Parent Rank
+  }));
+}
+
+// Save data as JSON file in Google Drive
+function saveDataAsJson(cycle, data, folder_id) {
+  const folder = DriveApp.getFolderById(folder_id);
+
+  const cycle_folder = folder.getFoldersByName(cycle).hasNext()
+  ? folder.getFoldersByName(cycle).next()
+  : folder.createFolder(cycle);
+
+  const jsonData = JSON.stringify(data);
+  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const fileName = `jira_data_${cycle}__${timestamp}.json`;
+
+  cycle_folder.createFile(fileName, jsonData);
+  Logger.log(`JSON file saved: ${fileName}`);
 }

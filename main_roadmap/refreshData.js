@@ -2,6 +2,7 @@
 const SHEETS = ["cloud", "charming", "saas", "devices", "is", "product", "security", "excellence", "ubuntu", "web"];
 const RELOAD_INDEX_SHEET = true;
 const BACKUP_NEEDED = true;
+
 const frequency = PropertiesService.getScriptProperties().getProperty("EXECUTION_FREQUENCY_IN_HOURS");
 const EXECUTION_FREQUENCY_IN_HOURS = frequency ? parseInt(frequency, 10) : 12; // default to 12 if missing
 //const SHEETS = ["devices"];
