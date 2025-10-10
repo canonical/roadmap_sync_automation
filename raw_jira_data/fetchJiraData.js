@@ -10,8 +10,11 @@ const CYCLES_CELL = "B3" //name of the cycles that need to be  fetched. Will be 
 const LAST_SYNC_DATE_CELL = "B1" //cell on the config sheet to store the lst update datetime
 const JIRA_API_TOKEN_PROPERTY_NAME = "JIRA_API_TOKEN" //Api token saved in the script properties
 
-const ROADMAP_STATE_FIELD_ID = "customfield_10968" //id of the Roadmap State customfield in Jira. !!! check data processing section in case this id need to be changed
+//!!! check data processing section in case these ids need to be changed
+const ROADMAP_STATE_FIELD_ID = "customfield_10968" //id of the Roadmap State customfield in Jira. 
 const RANK_FIELD_ID = "customfield_10019"
+const TEAM_FIELD_ID = "customfield_10001"
+
 const JIRA_API_BATCH_SIZE = 100; // For Jira API limits
 const JIRA_API_SLEEP = 0; // For Jira API limits
 
@@ -79,7 +82,7 @@ function main() {
 
       do {
         const jqlQuery = encodeURIComponent(`"Properties[Checkboxes]" = "Roadmap Item" AND project = "${project}" AND issuetype = Epic AND labels = "${cycle}" ORDER BY Parent ASC, Rank`);
-        let jiraUrl = `${jiraBaseUrl}/rest/api/3/search/jql?jql=${jqlQuery}&fields=key,summary,status,${ROADMAP_STATE_FIELD_ID},labels,parent,components,${RANK_FIELD_ID}&maxResults=${JIRA_API_BATCH_SIZE}`;
+        let jiraUrl = `${jiraBaseUrl}/rest/api/3/search/jql?jql=${jqlQuery}&fields=key,summary,status,${ROADMAP_STATE_FIELD_ID},labels,parent,components,${RANK_FIELD_ID},${TEAM_FIELD_ID}&maxResults=${JIRA_API_BATCH_SIZE}`;
 
         if (nextPageToken) {
           jiraUrl += "&nextPageToken=" + nextPageToken;
@@ -146,7 +149,8 @@ function main() {
         jiraBaseUrl + '/browse/' + issue.key,
         issue.fields.parent ? jiraBaseUrl + '/browse/' + issue.fields.parent.key : "",
         issue.fields.customfield_10019 ? issue.fields.customfield_10019 : "",
-        issue.fields.parent ? parentRanks.get(issue.fields.parent.key) : ""
+        issue.fields.parent ? parentRanks.get(issue.fields.parent.key) : "",
+        issue.fields.customfield_10001 ? issue.fields.customfield_10001.name : ""
       ]);
 
       projectData.sort((a, b) => {
@@ -175,7 +179,7 @@ function main() {
     dataSheet.clear(); // Clear previous data
 
     // Define headers and write them to the sheet
-    const headers = ["Project Key", "Epic Key", "Summary", "Current Status", "Roadmap State", "Labels", "Components", "Parent Key", "Parent Summary", "Epic Link", "Parent Link", "Issue Rank", "Parent Rank"];
+    const headers = ["Project Key", "Epic Key", "Summary", "Current Status", "Roadmap State", "Labels", "Components", "Parent Key", "Parent Summary", "Epic Link", "Parent Link", "Issue Rank", "Parent Rank", "Team"];
     dataSheet.appendRow(headers);
 
     // Write all data at once for better performance
@@ -249,7 +253,8 @@ function prepareJsonData(allData) {
     epicLink: row[9],         // Epic Link
     parentLink: row[10],      // Parent Link
     issueRank: row[11],       // Issue Rank
-    parentRank: row[12]       // Parent Rank
+    parentRank: row[12],      // Parent Rank
+    team: row[13]             // Team
   }));
 }
 
@@ -258,8 +263,8 @@ function saveDataAsJson(cycle, data, folder_id) {
   const folder = DriveApp.getFolderById(folder_id);
 
   const cycle_folder = folder.getFoldersByName(cycle).hasNext()
-  ? folder.getFoldersByName(cycle).next()
-  : folder.createFolder(cycle);
+    ? folder.getFoldersByName(cycle).next()
+    : folder.createFolder(cycle);
 
   const jsonData = JSON.stringify(data);
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");

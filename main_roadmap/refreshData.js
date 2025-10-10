@@ -5,9 +5,6 @@ const BACKUP_NEEDED = true;
 
 const frequency = PropertiesService.getScriptProperties().getProperty("EXECUTION_FREQUENCY_IN_HOURS");
 const EXECUTION_FREQUENCY_IN_HOURS = frequency ? parseInt(frequency, 10) : 12; // default to 12 if missing
-//const SHEETS = ["devices"];
-//const RELOAD_INDEX_SHEET = false;
-//const BACKUP_NEEDED = false;
 
 const CURRENT_CYCLE = PropertiesService.getScriptProperties().getProperty("CURRENT_CYCLE"); //current cycle
 const FUTURE_CYCLE = PropertiesService.getScriptProperties().getProperty("FUTURE_CYCLE"); //can be left empty if not applicable.
@@ -82,6 +79,7 @@ function main() {
   }
 
   processSheets(ss, CURRENT_CYCLE, true);
+
   if (FUTURE_CYCLE) {
     processSheets(ss, FUTURE_CYCLE, false);
   }
@@ -94,7 +92,9 @@ function main() {
     switchSheets(ss, sheetName, sheetName + "_temp")
   }
 
-  switchSheets(ss, INDEX_SHEET_NAME, INDEX_SHEET_NAME + "_temp")
+  if (RELOAD_INDEX_SHEET) {
+    switchSheets(ss, INDEX_SHEET_NAME, INDEX_SHEET_NAME + "_temp")
+  };
 
   Logger.log("Running script at: " + currentTime.toISOString());
   propService.setProperty('last_execution', currentTime.toISOString());
@@ -350,80 +350,91 @@ function getProjectIssuesInHierarchy(projectFilters, cycleNumber) {
   let hierarchy = {};
 
   projectFilters.forEach(projectFilter => {
-    Logger.log(`Processing the data for project: ${projectFilter.projectKey}. Components: ${projectFilter.components} Excluded Components: ${projectFilter.excludedComponents} Labels: ${projectFilter.labels}`);
+    Logger.log(`Processing the data for project: ${projectFilter.projectKey}. Components: ${projectFilter.components} Excluded Components: ${projectFilter.excludedComponents} Labels: ${projectFilter.labels} Teams: ${projectFilter.teams} Excluded Teams: ${projectFilter.excludedTeams}`);
+
     for (let i = 1; i < data.length; i++) {
       let row = data[i];
       let project = row[0];
 
-      if (project === projectFilter.projectKey) {
-        let components = row[6];
-        let include = true;
+      if (project !== projectFilter.projectKey) continue;
 
-        // Include components logic
-        if (projectFilter.components && projectFilter.components.length > 0) {
-          include = false;
-          components.split(",").forEach(component => {
-            if (projectFilter.components.includes(component.trim())) {
-              include = true;
-            }
-          });
-        }
+      let include = true;
+      let componentsCell = (row[6] || "").toString();
 
-        // Exclude components logic
-        if (projectFilter.excludedComponents && projectFilter.excludedComponents.length > 0) {
-          components.split(",").forEach(component => {
-            if (projectFilter.excludedComponents.includes(component.trim())) {
-              include = false;
-            }
-          });
-        }
-
-        if (!include) continue;
-
-        let labels = row[5];
-        if (projectFilter.labels && projectFilter.labels.length > 0) {
-          let labelInclude = false;
-          labels.split(",").forEach(label => {
-            if (projectFilter.labels.includes(label.trim())) {
-              labelInclude = true;
-            }
-          });
-
-          if (!labelInclude) continue;
-        }
-
-        let parentSummary = row[8];
-        let parentKey = row[7];
-        let parentLink = row[10];
-        let summary = row[2];
-        let key = row[1];
-        let epicLink = row[9];
-        let epicState = row[4];
-        let epicStatus = row[3];
-
-        if (!parentKey) {
-          parentKey = "None";
-        }
-        if (!hierarchy[parentKey]) {
-          hierarchy[parentKey] = {
-            key: parentKey,
-            summary: parentSummary,
-            parentLink: parentLink,
-            children: []
-          };
-          itemsCount += 2; // Parent plus whitespace
-        }
-
-        hierarchy[parentKey].children.push({
-          key: key,
-          summary: summary,
-          epicLink: epicLink,
-          status: epicStatus,
-          state: epicState,
-          labels: labels
+      if (projectFilter.components && projectFilter.components.length > 0) {
+        include = false;
+        componentsCell.split(",").forEach(component => {
+          if (projectFilter.components.includes(component.trim())) include = true;
         });
-        itemsCount += 1;
       }
+
+      if (projectFilter.excludedComponents && projectFilter.excludedComponents.length > 0) {
+        componentsCell.split(",").forEach(component => {
+          if (projectFilter.excludedComponents.includes(component.trim())) include = false;
+        });
+      }
+      if (!include) continue;
+
+      // Include Labels logic
+      let labelsCell = (row[5] || "").toString();
+      if (projectFilter.labels && projectFilter.labels.length > 0) {
+        let labelInclude = false;
+        labelsCell.split(",").forEach(label => {
+          if (projectFilter.labels.includes(label.trim())) labelInclude = true;
+        });
+        if (!labelInclude) continue;
+      }
+
+      // Include teams logic
+      let teamsCell = (row[13] || "").toString();
+      if (projectFilter.teams && projectFilter.teams.length > 0) {
+        let teamInclude = false;
+        teamsCell.split(",").forEach(team => {
+          if (projectFilter.teams.includes(team.trim())) teamInclude = true;
+        });
+        if (!teamInclude) continue;
+      }
+
+      // Excluded teams logic
+      if (projectFilter.excludedTeams && projectFilter.excludedTeams.length > 0) {
+        let teamExcluded = false;
+        teamsCell.split(",").forEach(team => {
+          if (projectFilter.excludedTeams.includes(team.trim())) teamExcluded = true;
+        });
+        if (teamExcluded) continue;
+      }
+
+      let parentSummary = row[8];
+      let parentKey = row[7];
+      let parentLink = row[10];
+      let summary = row[2];
+      let key = row[1];
+      let epicLink = row[9];
+      let epicState = row[4];
+      let epicStatus = row[3];
+
+      if (!parentKey) {
+        parentKey = "None";
+      }
+      if (!hierarchy[parentKey]) {
+        hierarchy[parentKey] = {
+          key: parentKey,
+          summary: parentSummary,
+          parentLink: parentLink,
+          children: []
+        };
+        itemsCount += 2;
+      }
+
+      hierarchy[parentKey].children.push({
+        key: key,
+        summary: summary,
+        epicLink: epicLink,
+        status: epicStatus,
+        state: epicState,
+        labels: labelsCell
+      });
+      itemsCount += 1;
     }
   });
 
@@ -530,52 +541,49 @@ function deleteOldBackups(folder, baseName, maxBackups) {
 }
 
 function parseProjectFilterValue(value) {
-  const match = value.match(PROJECT_REGEX_PATTERN);
+  if (!value || !value.trim()) return null;
 
-  if (!match) {
-    Logger.log("Invalid format");
-    return null;
-  }
-
-  let projectKey = "";
-  let labels = [];
-  let components = [];
-  let excludedComponents = [];
-
+  // helpers
   function parseValues(valueString) {
     if (!valueString) return [];
     return valueString
-      .match(/"([^"]+)"|[^,]+/g) // Match quoted values or unquoted ones
-      ?.map(v => v.replace(/^"|"$/g, '').trim()) // Remove surrounding quotes and trim
+      .match(/"([^"]+)"|[^,]+/g)              // quoted or unquoted tokens
+      ?.map(v => v.replace(/^"|"$/g, '').trim())
       .filter(v => v.length > 0) || [];
   }
 
-  if (match[1]) { // Format: <project key>(<labels>)[<components>]
-    projectKey = match[1].trim();
-    labels = parseValues(match[2]);
-    components = parseValues(match[3]).filter(c => !c.startsWith("!"));
-    excludedComponents = parseValues(match[3]).filter(c => c.startsWith("!")).map(c => c.substring(1));
-  } else if (match[4]) { // Format: <project key>[<components>](<labels>)
-    projectKey = match[4].trim();
-    components = parseValues(match[5]).filter(c => !c.startsWith("!"));
-    excludedComponents = parseValues(match[5]).filter(c => c.startsWith("!")).map(c => c.substring(1));
-    labels = parseValues(match[6]);
-  } else if (match[7]) { // Format: <project key>(<labels>)
-    projectKey = match[7].trim();
-    labels = parseValues(match[8]);
-  } else if (match[9]) { // Format: <project key>[<components>]
-    projectKey = match[9].trim();
-    components = parseValues(match[10]).filter(c => !c.startsWith("!"));
-    excludedComponents = parseValues(match[10]).filter(c => c.startsWith("!")).map(c => c.substring(1));
-  } else { // Format: <project key> (Only project key)
-    projectKey = match[11].trim();
-  }
+  // project key = everything before first bracket or the whole string
+  const m = value.match(/^\s*([^(\[{]+)/);
+  if (!m) return null;
+
+  const projectKey = m[1].trim();
+
+  // grab groups in any order
+  const labelsStr = (value.match(/\(([^)]*)\)/) || [])[1] || "";
+  const componentsStr = (value.match(/\[([^\]]*)\]/) || [])[1] || "";
+  const teamsStr = (value.match(/\{([^}]*)\}/) || [])[1] || "";
+
+  const labels = parseValues(labelsStr);
+
+  const allComponents = parseValues(componentsStr);
+  const components = allComponents.filter(c => !c.startsWith("!"));
+  const excludedComponents = allComponents
+    .filter(c => c.startsWith("!"))
+    .map(c => c.substring(1));
+
+  const allTeams = parseValues(teamsStr);
+  const teams = allTeams.filter(t => !t.startsWith("!"));
+  const excludedTeams = allTeams
+    .filter(t => t.startsWith("!"))
+    .map(t => t.substring(1));
 
   return {
     projectKey,
     components,
     excludedComponents,
-    labels
+    labels,
+    teams,
+    excludedTeams
   };
 }
 
