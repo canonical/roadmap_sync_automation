@@ -145,11 +145,16 @@ function processSheet(ss, sheet, cycleNumber, withColorUpdate) {
     let currentRowIndex = cycleRowIndex + 1;
     let currentColumnIndex = 2;
 
+    Logger.log("Groups remove process start")
     for (let row = cycleRowIndex; row < lastCycleRow; row++) {
       let depth = tempSheet.getRowGroupDepth(row);
-      if (depth < 1) continue;
-      tempSheet.getRowGroup(row, depth).remove();
+      if (depth < 1)
+        continue;
+      else
+        tempSheet.getRowGroup(row, depth).remove();
+      break;
     }
+    Logger.log("Groups remove process end")
 
     while (projectValue) {
       Logger.log(`Processing the ${projectValue}.`);
@@ -281,16 +286,19 @@ function processProject(cycleNumber, projectData, sheet, row_index, projectColum
 
     const childrens = issue.children;
     for (const child of childrens) {
-      if (withColorUpdate) {
-        const labelsarr = findCyclesInTheLabel(child.labels, cycleNumber);
-        if (labelsarr.length > 1) {
+      const labelsarr = findCyclesInTheLabel(child.labels, cycleNumber);
+      if (labelsarr.length > 1) {
+        if (labelsarr.length - 1 != 1) {
           values[currentRow][0] = labelsarr.length - 1;
-          fontColors[currentRow][0] = STATE_COLORS['white'];
-          fontWeights[currentRow][0] = 'bold';
-          alignments[currentRow][0] = "center";
-          backgrounds[currentRow][0] = STATE_COLORS["purple"];
         }
-
+        else
+          values[currentRow][0] = "";
+        fontColors[currentRow][0] = STATE_COLORS['white'];
+        fontWeights[currentRow][0] = 'bold';
+        alignments[currentRow][0] = "center";
+        backgrounds[currentRow][0] = STATE_COLORS["purple"];
+      }
+      if (withColorUpdate) {
         fontColors[currentRow][1] = STATE_COLORS['white'];
         fontWeights[currentRow][1] = 'bold';
         alignments[currentRow][1] = "center";
@@ -368,17 +376,28 @@ function getProjectIssuesInHierarchy(projectFilters, cycleNumber) {
     raw_data_cache[cycleNumber] = data;
   }
 
+  const projectMap = new Map();
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    const projectKey = row[0];
+    if (!projectMap.has(projectKey)) {
+      projectMap.set(projectKey, []);
+    }
+    projectMap.get(projectKey).push(row);
+  }
+
   let hierarchy = {};
 
   projectFilters.forEach(projectFilter => {
     Logger.log(`Processing the data for project: ${projectFilter.projectKey}. Components: ${projectFilter.components} Excluded Components: ${projectFilter.excludedComponents} Labels: ${projectFilter.labels} Teams: ${projectFilter.teams} Excluded Teams: ${projectFilter.excludedTeams}`);
 
-    for (let i = 1; i < data.length; i++) {
-      let row = data[i];
-      let project = row[0];
+    const projectRows = projectMap.get(projectFilter.projectKey);
 
-      if (project !== projectFilter.projectKey) continue;
+    if (!projectRows || projectRows.length === 0) {
+      return;
+    }
 
+    for (const row of projectRows) {
       let include = true;
       let componentsCell = (row[6] || "").toString();
 
@@ -396,7 +415,6 @@ function getProjectIssuesInHierarchy(projectFilters, cycleNumber) {
       }
       if (!include) continue;
 
-      // Include Labels logic
       let labelsCell = (row[5] || "").toString();
       if (projectFilter.labels && projectFilter.labels.length > 0) {
         let labelInclude = false;
@@ -406,7 +424,6 @@ function getProjectIssuesInHierarchy(projectFilters, cycleNumber) {
         if (!labelInclude) continue;
       }
 
-      // Include teams logic
       let teamsCell = (row[13] || "").toString();
       if (projectFilter.teams && projectFilter.teams.length > 0) {
         let teamInclude = false;
@@ -416,7 +433,6 @@ function getProjectIssuesInHierarchy(projectFilters, cycleNumber) {
         if (!teamInclude) continue;
       }
 
-      // Excluded teams logic
       if (projectFilter.excludedTeams && projectFilter.excludedTeams.length > 0) {
         let teamExcluded = false;
         teamsCell.split(",").forEach(team => {
@@ -564,25 +580,38 @@ function deleteOldBackups(folder, baseName, maxBackups) {
 function parseProjectFilterValue(value) {
   if (!value || !value.trim()) return null;
 
-  // helpers
   function parseValues(valueString) {
     if (!valueString) return [];
     return valueString
-      .match(/"([^"]+)"|[^,]+/g)              // quoted or unquoted tokens
+      .match(/"([^"]+)"|[^,]+/g)
       ?.map(v => v.replace(/^"|"$/g, '').trim())
       .filter(v => v.length > 0) || [];
   }
 
-  // project key = everything before first bracket or the whole string
-  const m = value.match(/^\s*([^(\[{]+)/);
-  if (!m) return null;
+  let remainingValue = value;
+  let labelsStr = "";
+  let componentsStr = "";
+  let teamsStr = "";
 
-  const projectKey = m[1].trim();
 
-  // grab groups in any order
-  const labelsStr = (value.match(/\(([^)]*)\)/) || [])[1] || "";
-  const componentsStr = (value.match(/\[([^\]]*)\]/) || [])[1] || "";
-  const teamsStr = (value.match(/\{([^}]*)\}/) || [])[1] || "";
+  const componentMatch = remainingValue.match(/\[([^\]]*)\]/);
+  if (componentMatch) {
+    componentsStr = componentMatch[1] || "";
+    remainingValue = remainingValue.replace(componentMatch[0], "");
+  }
+
+  const teamMatch = remainingValue.match(/\{([^}]*)\}/);
+  if (teamMatch) {
+    teamsStr = teamMatch[1] || "";
+    remainingValue = remainingValue.replace(teamMatch[0], "");
+  }
+  const labelMatch = remainingValue.match(/\(([^)]*)\)/);
+  if (labelMatch) {
+    labelsStr = labelMatch[1] || "";
+    remainingValue = remainingValue.replace(labelMatch[0], "");
+  }
+
+  const projectKey = remainingValue.trim();
 
   const labels = parseValues(labelsStr);
 
@@ -741,9 +770,10 @@ function generateIndexSheet(ss, lastExecutionTime) {
   }
 
   if (lastExecutionTime) {
-    const lastRow = 16;
+    const lastRow = 17;
     const lastExecutionDate = new Date(lastExecutionTime);
     const infoText = `Updated every: ${EXECUTION_FREQUENCY_IN_HOURS} hours | Last updated on: ${lastExecutionDate.toISOString()} (UTC) | Link to documentation: PR030 | Contact: JIRA`;
+    //const infoText = `Updated during breaks and lunch | Last updated on: ${lastExecutionDate.toISOString()} (UTC) | Link to documentation: PR030 | Contact: JIRA`;
     const richTextBuilder = SpreadsheetApp.newRichTextValue().setText(infoText);
 
     const docLinkText = "PR030";

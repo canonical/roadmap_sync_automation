@@ -105,7 +105,7 @@ function main() {
             // If the response code is not 200 (OK), log the error
             Logger.log(`Error fetching data for project: ${project}. Response code: ${response.getResponseCode()}`);
             Logger.log(`Error message: ${jsonResponse.errorMessages || jsonResponse.errors}`);
-            return;
+            throw new Error(`Error fetching data for project: ${project}. Response code: ${response.getResponseCode()}`);
           }
 
           if (!jsonResponse.issues || jsonResponse.issues.length === 0) {
@@ -122,18 +122,26 @@ function main() {
 
         } catch (e) {
           Logger.log(`Error during API request for project: ${project}. Error: ${e.message}`);
-          break;
+          throw e;
         }
 
       } while (nextPageToken);
 
-      totalIssues.forEach(issue => {
+      /*totalIssues.forEach(issue => {
         const parentKey = issue.fields.parent?.key;
         if (parentKey && !parentRanks.has(parentKey)) {
           const parentRank = fetchParentRank(parentKey, jiraBaseUrl, jiraEmail, jiraToken);
           parentRanks.set(parentKey, parentRank);
         }
-      });
+      });*/
+
+      for (const issue of totalIssues) {
+        const parentKey = issue.fields.parent?.key;
+        if (parentKey && !parentRanks.has(parentKey)) {
+          const parentRank = fetchParentRank(parentKey, jiraBaseUrl, jiraEmail, jiraToken);
+          parentRanks.set(parentKey, parentRank);
+        }
+      }
 
       // Process and append data
       const projectData = totalIssues.map(issue => [

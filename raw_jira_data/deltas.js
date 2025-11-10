@@ -3,7 +3,7 @@ function compareJsonFiles() {
   //const FILE_NAME_2 = "jira_data_25.10__2025-08-20T07-51-00-709Z.json";
   const SHEET_NAME = "Delta";
   const JSON_FOLDER_ID = "1DJDyuclwfrK_mdr2lIpssIHaxSknC04L"
-  const CYCLE = '25.10'
+  const CYCLE = '26.04'
 
   const folder = DriveApp.getFolderById(JSON_FOLDER_ID)
   const cycle_folder = folder.getFoldersByName(CYCLE).next()
