@@ -1,7 +1,7 @@
 function readSheetToNestedDict() {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("25.10_data");
   const data = sheet.getDataRange().getValues();
-  
+
   const headers = data[0];
   const result = {};
 

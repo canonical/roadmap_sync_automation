@@ -1,5 +1,5 @@
 //sheet names that should be processed
-const SHEETS = ["cloud", "charming", "saas", "devices", "is", "product", "security", "excellence", "ubuntu", "web"];
+const SHEETS = ["cloud", "charming", "saas", "devices", "cs", "sre", "product", "security", "excellence", "ubuntu", "web"];
 const RELOAD_INDEX_SHEET = true;
 const BACKUP_NEEDED = true;
 
@@ -14,7 +14,7 @@ const CYCLE_REGEX_PATTERN = /^\d{2}\.\d{2}$/; //regex pattern for cycles
 const PROJECT_REGEX_PATTERN = /^(.*?)\((.*?)\)\[(.*?)\]$|^(.*?)\[(.*?)\]\((.*?)\)$|^(.*?)\((.*?)\)$|^(.*?)\[(.*?)\]$|^(.*?)$/; // regex pattern for project filter
 
 const BACKUP_FOLDER_ID = "1B37pAPfBXAsTlSD3azt4FY-mrNhaa3jT"; //from the URL e.g. https://drive.google.com/drive/folders/**FOLDER_ID**
-const MAX_BACKUPS_COUNT = 360;
+const MAX_BACKUPS_COUNT = 720;
 
 const WHITE_STATUSES = ["Untriaged", "Triaged"] //not started statuses
 const GREEN_STATUSES = ["In Progress", "In Review", "To Be Deployed", "BLOCKED"] // statuses that green by default, if roadmap state is empty
@@ -48,7 +48,7 @@ let raw_data_cache = {};
 function main() {
   const propService = PropertiesService.getScriptProperties();
   const lastExecutionTime = propService.getProperty('last_execution');
-  const currentTime = new Date();
+  var currentTime = new Date();
 
   if (lastExecutionTime) {
     const hoursInMillis = EXECUTION_FREQUENCY_IN_HOURS * 60 * 60 * 1000;
@@ -84,7 +84,7 @@ function main() {
     processSheets(ss, FUTURE_CYCLE, false);
   }
   if (RELOAD_INDEX_SHEET) {
-    generateIndexSheet(ss, currentTime);
+    generateIndexSheet(ss);
   }
 
   //switch originals to temps
@@ -680,7 +680,7 @@ function copyAndHideSheet(ss, source_sheet, target_sheetName, deleteIfExists = f
   return tempSheet;
 }
 
-function generateIndexSheet(ss, lastExecutionTime) {
+function generateIndexSheet(ss) {
   Logger.log("Index sheet generation started.");
   const indexSheet = ss.getSheetByName(INDEX_SHEET_NAME);
   if (!indexSheet) {
@@ -769,26 +769,24 @@ function generateIndexSheet(ss, lastExecutionTime) {
     tempIndexSheet.getRange(3, 1, outputRows, outputColumns).setRichTextValues(richTextMatrix);
   }
 
-  if (lastExecutionTime) {
-    const lastRow = 17;
-    const lastExecutionDate = new Date(lastExecutionTime);
-    const infoText = `Updated every: ${EXECUTION_FREQUENCY_IN_HOURS} hours | Last updated on: ${lastExecutionDate.toISOString()} (UTC) | Link to documentation: PR030 | Contact: JIRA`;
-    //const infoText = `Updated during breaks and lunch | Last updated on: ${lastExecutionDate.toISOString()} (UTC) | Link to documentation: PR030 | Contact: JIRA`;
-    const richTextBuilder = SpreadsheetApp.newRichTextValue().setText(infoText);
+  const lastRow = 17;
+  const lastExecutionDate = new Date();
+  const infoText = `Updated every: ${EXECUTION_FREQUENCY_IN_HOURS} hours | Last updated on: ${lastExecutionDate.toISOString()} (UTC) | Link to documentation: PR030 | Contact: JIRA`;
+  //const infoText = `Updated during breaks and lunch | Last updated on: ${lastExecutionDate.toISOString()} (UTC) | Link to documentation: PR030 | Contact: JIRA`;
+  const richTextBuilder = SpreadsheetApp.newRichTextValue().setText(infoText);
 
-    const docLinkText = "PR030";
-    const docStartIndex = infoText.indexOf(docLinkText);
-    richTextBuilder.setLinkUrl(docStartIndex, docStartIndex + docLinkText.length, DOC_LINK);
+  const docLinkText = "PR030";
+  const docStartIndex = infoText.indexOf(docLinkText);
+  richTextBuilder.setLinkUrl(docStartIndex, docStartIndex + docLinkText.length, DOC_LINK);
 
-    const contactLinkText = "JIRA";
-    const contactStartIndex = infoText.indexOf(contactLinkText);
-    richTextBuilder.setLinkUrl(contactStartIndex, contactStartIndex + contactLinkText.length, CONTACT_LINK);
+  const contactLinkText = "JIRA";
+  const contactStartIndex = infoText.indexOf(contactLinkText);
+  richTextBuilder.setLinkUrl(contactStartIndex, contactStartIndex + contactLinkText.length, CONTACT_LINK);
 
-    const range = tempIndexSheet.getRange(lastRow, 1);
-    range.clearFormat();
-    range.setWrap(false);
-    range.setRichTextValue(richTextBuilder.build());
-  }
+  const range = tempIndexSheet.getRange(lastRow, 1);
+  range.clearFormat();
+  range.setWrap(false);
+  range.setRichTextValue(richTextBuilder.build());
 
   Logger.log("Index sheet updated.");
 }

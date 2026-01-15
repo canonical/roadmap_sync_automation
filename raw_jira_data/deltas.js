@@ -1,6 +1,6 @@
 function compareJsonFiles() {
-  //const FILE_NAME_1 = "jira_data_25.10__2025-08-19T10-13-15-063Z.json";
-  //const FILE_NAME_2 = "jira_data_25.10__2025-08-20T07-51-00-709Z.json";
+  const FILE_NAME_1 = "jira_data_26.04__2025-12-04T00-52-08-225Z.json";
+  //const FILE_NAME_2 = "jira_data_26.04__2025-11-19T11-51-35-318Z.json";
   const SHEET_NAME = "Delta";
   const JSON_FOLDER_ID = "1DJDyuclwfrK_mdr2lIpssIHaxSknC04L"
   const CYCLE = '26.04'
@@ -9,11 +9,11 @@ function compareJsonFiles() {
   const cycle_folder = folder.getFoldersByName(CYCLE).next()
 
   const result = getLatestAndFirstFileInFolder(cycle_folder);
-  const file1 = result.firstCreatedFile;
+  //const file1 = result.firstCreatedFile;
   const file2 = result.latestFile;
 
   // Get the files from Google Drive
-  //const file1 = cycle_folder.getFilesByName(FILE_NAME_1).hasNext() ? cycle_folder.getFilesByName(FILE_NAME_1).next() : null;
+  const file1 = cycle_folder.getFilesByName(FILE_NAME_1).hasNext() ? cycle_folder.getFilesByName(FILE_NAME_1).next() : null;
   //const file2 = cycle_folder.getFilesByName(FILE_NAME_2).hasNext() ? cycle_folder.getFilesByName(FILE_NAME_2).next() : null;
 
   if (!file1 || !file2) {

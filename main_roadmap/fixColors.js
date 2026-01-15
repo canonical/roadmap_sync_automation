@@ -17,19 +17,19 @@ function replaceAllBackgroundColors() {
       "#ff9900", "#e69138", "#f1c232", "#ffd966", "#fff2cc", "#f9cb9c", "#f6b26b"
     ]
   };
-  
+
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheets = ss.getSheets();
-  
+
   sheets.forEach(sheet => {
     if (!sheet.isSheetHidden()) { // Only process visible sheets
       var range = sheet.getDataRange();
       var backgrounds = range.getBackgrounds();
-      
+
       for (var i = 0; i < backgrounds.length; i++) {
         for (var j = 0; j < backgrounds[i].length; j++) {
           let currentColor = backgrounds[i][j].toLowerCase();
-          
+
           for (let targetColor in colorMap) {
             if (colorMap[targetColor].includes(currentColor)) {
               backgrounds[i][j] = targetColor;
@@ -38,11 +38,11 @@ function replaceAllBackgroundColors() {
           }
         }
       }
-      
+
       range.setBackgrounds(backgrounds);
     }
   });
-  
+
   SpreadsheetApp.flush();
 }
 

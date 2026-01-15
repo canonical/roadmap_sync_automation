@@ -16,7 +16,7 @@ const RANK_FIELD_ID = "customfield_10019"
 const TEAM_FIELD_ID = "customfield_10001"
 
 const JIRA_API_BATCH_SIZE = 100; // For Jira API limits
-const JIRA_API_SLEEP = 0; // For Jira API limits
+const JIRA_API_SLEEP = 50; // For Jira API limits
 
 const JSON_FOLDER_ID = "1DJDyuclwfrK_mdr2lIpssIHaxSknC04L"
 

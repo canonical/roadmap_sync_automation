@@ -1,4 +1,4 @@
-const SHEETS_TO_SCAN = ["cloud", "charming", "saas", "devices", "is", "product", "security", "excellence", "ubuntu", "web"];
+const SHEETS_TO_SCAN = ["cloud", "charming", "saas", "devices", "cs", "sre", "product", "security", "excellence", "ubuntu", "web"];
 const OUTPUT_FOLDER_ID = "1DJDyuclwfrK_mdr2lIpssIHaxSknC04L";
 const OUTPUT_FILENAME = "roadmap_filters.json";
 

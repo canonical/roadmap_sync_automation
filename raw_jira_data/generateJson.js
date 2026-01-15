@@ -44,9 +44,9 @@ function generateJsonFromSheets() {
 
       if (allData.length > 0) {
         // Prepare JSON data from the sheet data
-        const jsonData = prepareJsonData(allData);
+        const jsonData = prepareJsonData_sheet(allData);
         // Save data as a JSON file in the specified folder
-        saveDataAsJson(cycle, jsonData, JSON_FOLDER);
+        saveDataAsJson_sheet(cycle, jsonData, JSON_FOLDER);
         Logger.log(`Successfully generated JSON for cycle: ${cycle}`);
         filesGenerated++;
       } else {
@@ -66,7 +66,7 @@ function generateJsonFromSheets() {
  * Converts the 2D array from the sheet into an array of objects for JSON.
  * This assumes the sheet has at least 14 columns matching the original script's output.
  */
-function prepareJsonData(allData) {
+function prepareJsonData_sheet(allData) {
   return allData.map(row => ({
     project: row[0] || "",          // Project Key
     key: row[1] || "",              // Epic Key
@@ -88,7 +88,7 @@ function prepareJsonData(allData) {
 /**
  * Saves the provided data as a JSON file in a specific Google Drive folder.
  */
-function saveDataAsJson(cycle, data, folder_id) {
+function saveDataAsJson_sheet(cycle, data, folder_id) {
   try {
     const folder = DriveApp.getFolderById(folder_id);
 
