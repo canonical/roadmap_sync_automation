@@ -8,13 +8,13 @@ const EXECUTION_FREQUENCY_IN_HOURS = frequency ? parseInt(frequency, 10) : 12; /
 
 const CURRENT_CYCLE = PropertiesService.getScriptProperties().getProperty("CURRENT_CYCLE"); //current cycle
 const FUTURE_CYCLE = PropertiesService.getScriptProperties().getProperty("FUTURE_CYCLE"); //can be left empty if not applicable.
+//const FUTURE_CYCLE = false; //can be left empty if not applicable.
 
 const JIRA_DATA_SPREADSHEET_ID = "1E_Qa5zCtI4JeiXKq0yW2KNzU9F1Q_Bt39FxVCxVMjZ4"; //Spreadsheet ID with Jira data for roadmap
 const CYCLE_REGEX_PATTERN = /^\d{2}\.\d{2}$/; //regex pattern for cycles
 const PROJECT_REGEX_PATTERN = /^(.*?)\((.*?)\)\[(.*?)\]$|^(.*?)\[(.*?)\]\((.*?)\)$|^(.*?)\((.*?)\)$|^(.*?)\[(.*?)\]$|^(.*?)$/; // regex pattern for project filter
 
 const BACKUP_FOLDER_ID = "1B37pAPfBXAsTlSD3azt4FY-mrNhaa3jT"; //from the URL e.g. https://drive.google.com/drive/folders/**FOLDER_ID**
-const MAX_BACKUPS_COUNT = 720;
 
 const WHITE_STATUSES = ["Untriaged", "Triaged"] //not started statuses
 const GREEN_STATUSES = ["In Progress", "In Review", "To Be Deployed", "BLOCKED"] // statuses that green by default, if roadmap state is empty
@@ -64,11 +64,11 @@ function main() {
     }
   }
 
+  let ss = SpreadsheetApp.getActiveSpreadsheet();
   //create backup of the spreadsheet
   if (BACKUP_NEEDED) {
-    backupSpreadsheet(BACKUP_FOLDER_ID, MAX_BACKUPS_COUNT)
+    backupBeforeRun(ss, BACKUP_FOLDER_ID)
   }
-  let ss = SpreadsheetApp.getActiveSpreadsheet();
 
   //remove all unfinished temp sheets
   for (const sheetName of SHEETS) {
@@ -530,51 +530,18 @@ function getNextPrevKeys(map, key) {
   };
 }
 
-function backupSpreadsheet(backupFolderID, maxBackups) {
-  const start = new Date();
-  Logger.log("Backup creation. Backup folder: " + backupFolderID)
-
-  const sourceSpreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-  const sourceId = sourceSpreadsheet.getId();
+function backupBeforeRun(ss, backupFolderID) {
+  const start = Date.now();
   const folder = DriveApp.getFolderById(backupFolderID);
 
-  // Format timestamp: YYYY-MM-DD HH-MM-SS
   const now = new Date();
-  const timestamp = Utilities.formatDate(now, Session.getScriptTimeZone(), "yyyy-MM-dd HH-mm-ss");
-  const backupName = `${sourceSpreadsheet.getName()} - Backup ${timestamp}`;
+  const ts = Utilities.formatDate(now, Session.getScriptTimeZone(), "yyyy-MM-dd HH-mm-ss");
+  const name = `${ss.getName()} - Backup ${ts}`;
 
-  // Make a backup copy and move it to the folder
-  const backupFile = DriveApp.getFileById(sourceId).makeCopy(backupName, folder);
-  Logger.log("Backup created: " + backupFile.getUrl());
+  DriveApp.getFileById(ss.getId()).makeCopy(name, folder);
 
-  // Clean up old backups
-  deleteOldBackups(folder, sourceSpreadsheet.getName(), maxBackups);
-
-  const end = new Date();
-  const executionTime = (end - start);
-  Logger.log(`backupSpreadsheet execution time: ${executionTime} ms`);
-}
-
-// Helper function to delete older backups beyond the limit
-function deleteOldBackups(folder, baseName, maxBackups) {
-  const files = folder.getFiles();
-  const backups = [];
-
-  while (files.hasNext()) {
-    const file = files.next();
-    if (file.getName().startsWith(baseName + " - Backup")) {
-      backups.push(file);
-    }
-  }
-
-  // Sort backups by creation date (newest first)
-  backups.sort((a, b) => b.getDateCreated() - a.getDateCreated());
-
-  // Delete oldest ones beyond the allowed max
-  for (let i = maxBackups; i < backups.length; i++) {
-    backups[i].setTrashed(true);
-    Logger.log("Deleted old backup: " + backups[i].getName());
-  }
+  Logger.log(`Pre-run backup created: ${name}`);
+  Logger.log(`backupBeforeRun_ time: ${Date.now() - start} ms`);
 }
 
 function parseProjectFilterValue(value) {
