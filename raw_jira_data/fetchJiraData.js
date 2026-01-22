@@ -15,8 +15,8 @@ const ROADMAP_STATE_FIELD_ID = "customfield_10968" //id of the Roadmap State cus
 const RANK_FIELD_ID = "customfield_10019"
 const TEAM_FIELD_ID = "customfield_10001"
 
-const JIRA_API_BATCH_SIZE = 100; // For Jira API limits
-const JIRA_API_SLEEP = 50; // For Jira API limits
+const JIRA_API_BATCH_SIZE = 200; // For Jira API limits
+const JIRA_API_SLEEP = 100; // For Jira API limits
 
 const JSON_FOLDER_ID = "1DJDyuclwfrK_mdr2lIpssIHaxSknC04L"
 
@@ -70,86 +70,38 @@ function main() {
       dataSheet.setName(dataSheetName);
     }
 
-    let allData = [];
+    const projectsJql = projects.map(p => `"${p}"`).join(",");
 
-    // Loop through each project
-    for (let project of projects) {
-      Logger.log(`Fetching data for project: ${project}`);
+    const jql =
+      `"Properties[Checkboxes]" = "Roadmap Item"` +
+      ` AND project IN (${projectsJql})` +
+      ` AND issuetype = Epic` +
+      ` AND labels = "${cycle}"` +
+      ` ORDER BY Parent ASC, Rank`;
 
-      let totalIssues = [];
-      let response, jsonResponse;
-      let nextPageToken = null;
+    Logger.log(`Fetching data for all projects in one call for cycle: ${cycle}`);
 
-      do {
-        const jqlQuery = encodeURIComponent(`"Properties[Checkboxes]" = "Roadmap Item" AND project = "${project}" AND issuetype = Epic AND labels = "${cycle}" ORDER BY Parent ASC, Rank`);
-        let jiraUrl = `${jiraBaseUrl}/rest/api/3/search/jql?jql=${jqlQuery}&fields=key,summary,status,${ROADMAP_STATE_FIELD_ID},labels,parent,components,${RANK_FIELD_ID},${TEAM_FIELD_ID}&maxResults=${JIRA_API_BATCH_SIZE}`;
+    const totalIssues = fetchAllIssuesByJql_(jiraBaseUrl, jiraEmail, jiraToken, jql);
 
-        if (nextPageToken) {
-          jiraUrl += "&nextPageToken=" + nextPageToken;
-        }
+    const parentKeys = [...new Set(
+      totalIssues.map(i => i.fields.parent?.key).filter(Boolean)
+    )];
 
-        // API Request
-        const options = {
-          method: "GET",
-          headers: {
-            Authorization: `Basic ${Utilities.base64Encode(jiraEmail + ":" + jiraToken)}`,
-            Accept: "application/json"
-          }
-        };
+    Logger.log(`Getting info about parent's rank in a bulk`);
+    fetchParentRanksBulk_(jiraBaseUrl, jiraEmail, jiraToken, parentKeys, parentRanks);
 
-        try {
-          response = UrlFetchApp.fetch(jiraUrl, options);
-          jsonResponse = JSON.parse(response.getContentText());
 
-          if (response.getResponseCode() !== 200) {
-            // If the response code is not 200 (OK), log the error
-            Logger.log(`Error fetching data for project: ${project}. Response code: ${response.getResponseCode()}`);
-            Logger.log(`Error message: ${jsonResponse.errorMessages || jsonResponse.errors}`);
-            throw new Error(`Error fetching data for project: ${project}. Response code: ${response.getResponseCode()}`);
-          }
+    let allData = totalIssues.map(issue => {
+      const projectKey = issue.fields.project?.key || "";
 
-          if (!jsonResponse.issues || jsonResponse.issues.length === 0) {
-            Logger.log(`No issues found for project: ${project} with label: ${cycle}`);
-            break;
-          }
-
-          totalIssues = totalIssues.concat(jsonResponse.issues);
-          nextPageToken = jsonResponse.nextPageToken || null;
-
-          // Prevent hitting Jira rate limits
-          if (JIRA_API_SLEEP > 0)
-            Utilities.sleep(JIRA_API_SLEEP);
-
-        } catch (e) {
-          Logger.log(`Error during API request for project: ${project}. Error: ${e.message}`);
-          throw e;
-        }
-
-      } while (nextPageToken);
-
-      /*totalIssues.forEach(issue => {
-        const parentKey = issue.fields.parent?.key;
-        if (parentKey && !parentRanks.has(parentKey)) {
-          const parentRank = fetchParentRank(parentKey, jiraBaseUrl, jiraEmail, jiraToken);
-          parentRanks.set(parentKey, parentRank);
-        }
-      });*/
-
-      for (const issue of totalIssues) {
-        const parentKey = issue.fields.parent?.key;
-        if (parentKey && !parentRanks.has(parentKey)) {
-          const parentRank = fetchParentRank(parentKey, jiraBaseUrl, jiraEmail, jiraToken);
-          parentRanks.set(parentKey, parentRank);
-        }
-      }
-
-      // Process and append data
-      const projectData = totalIssues.map(issue => [
-        project,
+      return [
+        projectKey,
         issue.key,
         issue.fields.summary,
         issue.fields.status.name,
-        issue.fields.customfield_10968 ? issue.fields.customfield_10968.value.replace(/[^\p{L}\p{N}\p{P}\p{Z}^$\n]/gu, '').trim() : "",
+        issue.fields.customfield_10968
+          ? issue.fields.customfield_10968.value.replace(/[^\p{L}\p{N}\p{P}\p{Z}^$\n]/gu, '').trim()
+          : "",
         `'` + (issue.fields.labels || []).join(", "),
         getComponentsString(issue.fields.components),
         issue.fields.parent ? issue.fields.parent.key : "",
@@ -159,30 +111,37 @@ function main() {
         issue.fields.customfield_10019 ? issue.fields.customfield_10019 : "",
         issue.fields.parent ? parentRanks.get(issue.fields.parent.key) : "",
         issue.fields.customfield_10001 ? issue.fields.customfield_10001.name : ""
-      ]);
+      ];
+    });
 
-      projectData.sort((a, b) => {
-        const parentKeyA = a[7]; // Parent Key
-        const parentKeyB = b[7];
-        const issueRankA = a[11]; // Issue Rank
-        const issueRankB = b[11];
+    allData.sort((a, b) => {
+      const projectA = a[0] || "";
+      const projectB = b[0] || "";
 
-        const parentRankA = parentRanks.get(parentKeyA) || "";
-        const parentRankB = parentRanks.get(parentKeyB) || "";
+      // 1) Group by project first
+      if (projectA < projectB) return -1;
+      if (projectA > projectB) return 1;
 
-        // Compare parent rank first
-        if (parentRankA < parentRankB) return -1;
-        if (parentRankA > parentRankB) return 1;
+      // 2) Then by parent rank
+      const parentKeyA = a[7];
+      const parentKeyB = b[7];
+      const parentRankA = parentRanks.get(parentKeyA) || "";
+      const parentRankB = parentRanks.get(parentKeyB) || "";
 
-        // If parent ranks are equal, compare issue rank
-        if (issueRankA < issueRankB) return -1;
-        if (issueRankA > issueRankB) return 1;
+      if (parentRankA < parentRankB) return -1;
+      if (parentRankA > parentRankB) return 1;
 
-        return 0;
-      });
+      // 3) Then by issue rank
+      const issueRankA = a[11] || "";
+      const issueRankB = b[11] || "";
 
-      allData = allData.concat(projectData);
-    }
+      if (issueRankA < issueRankB) return -1;
+      if (issueRankA > issueRankB) return 1;
+
+      return 0;
+    });
+
+
 
     dataSheet.clear(); // Clear previous data
 
@@ -228,6 +187,7 @@ function fetchParentRank(parentKey, jiraBaseUrl, jiraEmail, jiraToken) {
       return "";
     }
 
+    Logger.log(`Parent call to check the rank ${parentKey} Rank ${data.fields.customfield_10019}`);
     return data.fields.customfield_10019;
 
   } catch (e) {
@@ -281,3 +241,140 @@ function saveDataAsJson(cycle, data, folder_id) {
   cycle_folder.createFile(fileName, jsonData);
   Logger.log(`JSON file saved: ${fileName}`);
 }
+
+function fetchAllIssuesByJql_(jiraBaseUrl, jiraEmail, jiraToken, jql) {
+  Logger.log(`JQL: ${jql}`);
+  let issues = [];
+  let nextPageToken = null;
+
+  const url = `${jiraBaseUrl}/rest/api/3/search/jql`;
+
+  const headers = {
+    Authorization: `Basic ${Utilities.base64Encode(jiraEmail + ":" + jiraToken)}`,
+    Accept: "application/json",
+    "Content-Type": "application/json"
+  };
+
+  while (true) {
+    const payload = {
+      jql: jql,
+      maxResults: JIRA_API_BATCH_SIZE,
+      fields: [
+        "key",
+        "summary",
+        "status",
+        "project",
+        ROADMAP_STATE_FIELD_ID,
+        "labels",
+        "parent",
+        "components",
+        RANK_FIELD_ID,
+        TEAM_FIELD_ID
+      ]
+    };
+
+    if (nextPageToken) payload.nextPageToken = nextPageToken;
+
+    const options = {
+      method: "POST",
+      headers: headers,
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    };
+
+    const response = UrlFetchApp.fetch(url, options);
+    const text = response.getContentText();
+    const data = JSON.parse(text);
+
+    if (response.getResponseCode() !== 200) {
+      Logger.log(`Error fetching issues. Code: ${response.getResponseCode()}`);
+      Logger.log(`Response: ${text}`);
+      throw new Error(`Jira search/jql failed: ${response.getResponseCode()}`);
+    }
+
+    const pageIssues = data.issues || [];
+    if (!pageIssues.length) break;
+
+    issues = issues.concat(pageIssues);
+    nextPageToken = data.nextPageToken || null;
+
+    if (!nextPageToken) break;
+
+    if (JIRA_API_SLEEP > 0) Utilities.sleep(JIRA_API_SLEEP);
+  }
+
+  return issues;
+}
+
+function fetchParentRanksBulk_(jiraBaseUrl, jiraEmail, jiraToken, parentKeys, parentRanksMap) {
+  // parentKeys: array of strings
+  if (!parentKeys || parentKeys.length === 0) return;
+
+  // Only fetch missing keys
+  const missing = parentKeys.filter(k => k && !parentRanksMap.has(k));
+  if (missing.length === 0) return;
+
+  const url = `${jiraBaseUrl}/rest/api/3/search/jql`;
+
+  const headers = {
+    Authorization: `Basic ${Utilities.base64Encode(jiraEmail + ":" + jiraToken)}`,
+    Accept: "application/json",
+    "Content-Type": "application/json"
+  };
+
+  // Chunk size: keep safe for JQL size + maxResults.
+  const CHUNK_SIZE = 100;
+
+  for (let i = 0; i < missing.length; i += CHUNK_SIZE) {
+    const chunk = missing.slice(i, i + CHUNK_SIZE);
+
+    const keysJql = chunk.map(k => `"${k}"`).join(",");
+    const jql = `key in (${keysJql})`;
+
+    let nextPageToken = null;
+    while (true) {
+      const payload = {
+        jql: jql,
+        maxResults: Math.min(JIRA_API_BATCH_SIZE, chunk.length),
+        fields: ["key", RANK_FIELD_ID]
+      };
+      if (nextPageToken) payload.nextPageToken = nextPageToken;
+
+      const options = {
+        method: "POST",
+        headers: headers,
+        payload: JSON.stringify(payload),
+        muteHttpExceptions: true
+      };
+
+      const response = UrlFetchApp.fetch(url, options);
+      const text = response.getContentText();
+      const data = JSON.parse(text);
+
+      if (response.getResponseCode() !== 200) {
+        Logger.log(`Bulk parent ranks failed. Code: ${response.getResponseCode()}`);
+        Logger.log(`Response: ${text}`);
+        break;
+      }
+
+      (data.issues || []).forEach(issue => {
+        const key = issue.key;
+        const rank = issue.fields ? (issue.fields[RANK_FIELD_ID] || "") : "";
+        parentRanksMap.set(key, rank);
+      });
+
+      nextPageToken = data.nextPageToken || null;
+      if (!nextPageToken) break;
+
+      if (JIRA_API_SLEEP > 0) Utilities.sleep(JIRA_API_SLEEP);
+    }
+
+    // Cache missing keys as empty to avoid re-fetching them again later
+    chunk.forEach(k => {
+      if (!parentRanksMap.has(k)) parentRanksMap.set(k, "");
+    });
+
+    if (JIRA_API_SLEEP > 0) Utilities.sleep(JIRA_API_SLEEP);
+  }
+}
+
