@@ -43,6 +43,7 @@ const DOC_LINK = "https://docs.google.com/document/d/1_Cjvi3gjZ6xsdkodkan3fMCoaS
 
 
 let raw_data_cache = {};
+let project_map_cache = {};
 
 //main function for manual run or for time based trigger
 function main() {
@@ -78,10 +79,10 @@ function main() {
     }
   }
 
-  processSheets(ss, CURRENT_CYCLE, true);
+  processSheets(ss, CURRENT_CYCLE, true, lastExecutionTime);
 
   if (FUTURE_CYCLE) {
-    processSheets(ss, FUTURE_CYCLE, false);
+    processSheets(ss, FUTURE_CYCLE, false, lastExecutionTime);
   }
   if (RELOAD_INDEX_SHEET) {
     generateIndexSheet(ss);
@@ -100,7 +101,7 @@ function main() {
   propService.setProperty('last_execution', currentTime.toISOString());
 }
 
-function processSheets(ss, cycleNumber, withColorUpdate) {
+function processSheets(ss, cycleNumber, withColorUpdate, lastExecutionTime) {
   for (const sheetName of SHEETS) {
     const sheet = ss.getSheetByName(sheetName);
     if (!sheet) {
@@ -109,12 +110,13 @@ function processSheets(ss, cycleNumber, withColorUpdate) {
     }
 
     Logger.log(`Processing of the sheet: ${sheetName}. Cycle Number: ${cycleNumber}`);
-    processSheet(ss, sheet, cycleNumber, withColorUpdate); //process the sheet
+    processSheet(ss, sheet, cycleNumber, withColorUpdate, lastExecutionTime); //process the sheet
   }
 }
 
-function processSheet(ss, sheet, cycleNumber, withColorUpdate) {
-
+function processSheet(ss, sheet, cycleNumber, withColorUpdate, lastExecutionTime) {
+  const start = new Date();
+  Logger.log("processSheet start")
   sheetName = sheet.getName();
   //create a copy of the sheet and hide it
   let tempSheet = copyAndHideSheet(ss, sheet, sheetName + "_temp");
@@ -129,6 +131,8 @@ function processSheet(ss, sheet, cycleNumber, withColorUpdate) {
     tempSheet.getRange(6, 1, 1, tempSheet.getLastColumn()).copyFormatToRange(tempSheet, newReleaseCell.getColumn(), newReleaseCell.getColumn(), newReleaseCell.getRow(), newReleaseCell.getRow());
     cycles = findCyclesOnTheSheet(tempSheet);
   }
+
+  const lastExecutionDate = lastExecutionTime ? new Date(lastExecutionTime) : null;
 
   if (cycles.has(cycleNumber)) {
 
@@ -176,6 +180,27 @@ function processSheet(ss, sheet, cycleNumber, withColorUpdate) {
       })
 
       let projectData = getProjectIssuesInHierarchy(projectFilters, cycleNumber);
+
+      const expectedEndRow = currentRowIndex + projectData.count;
+
+      if (projectData && projectData.latestUpdated && lastExecutionDate) {
+        if (lastExecutionDate >= projectData.latestUpdated) {
+          Logger.log(
+            `Skip refresh for ${projectValue}: last_execution (${lastExecutionDate.toISOString()}) ` +
+            `>= latest issue updated (${projectData.latestUpdated.toISOString()})`
+          );
+          if (expectedEndRow > maxRow) {
+            maxRow = expectedEndRow;
+          }
+
+          // move to next project column
+          currentColumnIndex += 5;
+          projectColumnIndex += 5;
+          projectsStringCell = tempSheet.getRange(PROJECT_ROW_INDEX, projectColumnIndex);
+          projectValue = projectsStringCell.getValue();
+          continue;
+        }
+      }
 
       if (!projectData || !projectData.hierarchy || projectData.hierarchy.length == 0) {
         Logger.log("Jira Data is empty. Project will not be synced.")
@@ -228,6 +253,7 @@ function processSheet(ss, sheet, cycleNumber, withColorUpdate) {
       cycleRange.shiftRowGroupDepth(1);
     }
   }
+  Logger.log(`processSheet execution time: ${Date.now() - start} ms`);
 }
 
 function normalize_range_format(range) {
@@ -241,6 +267,7 @@ function normalize_range_format(range) {
 
 function processProject(cycleNumber, projectData, sheet, row_index, projectColumnIndex, lastCycleRow, withColorUpdate) {
   const start = new Date();
+  Logger.log("processProject start")
   const itemsRowsCount = projectData.count;
   const currentRowsCount = lastCycleRow - row_index;
   const howMany = itemsRowsCount - currentRowsCount;
@@ -250,8 +277,7 @@ function processProject(cycleNumber, projectData, sheet, row_index, projectColum
   }
 
   if (itemsRowsCount === 0) {
-    const end = new Date();
-    Logger.log(`processProject execution time: ${end - start} ms (No items to process)`);
+    Logger.log(`processProject execution time: ${Date.now() - start} ms (No items to process)`);
     return row_index;
   }
 
@@ -263,7 +289,7 @@ function processProject(cycleNumber, projectData, sheet, row_index, projectColum
   const backgrounds = Array(totalRowsToProcess).fill(null).map(() => Array(5).fill(STATE_COLORS["white"]));
   const fontColors = Array(totalRowsToProcess).fill(null).map(() => Array(5).fill("black"));
   const fontWeights = Array(totalRowsToProcess).fill(null).map(() => Array(5).fill("normal"));
-  const richTextValues = Array(totalRowsToProcess).fill(null).map(() => Array(5).fill(null)); // Will contain nulls initially
+  const richTextValues = Array(totalRowsToProcess).fill(null).map(() => Array(5).fill(null));
   const alignments = Array(totalRowsToProcess).fill(null).map(() => Array(5).fill("left"));
 
   let currentRow = 0;
@@ -340,7 +366,6 @@ function processProject(cycleNumber, projectData, sheet, row_index, projectColum
   for (let r = 0; r < totalRowsToProcess; r++) {
     for (let c = 0; c < 5; c++) {
       if (richTextValues[r][c] === null) {
-        // If we didn't create a special linked value, create a basic one from the text value.
         const text = values[r][c] ? values[r][c].toString() : "";
         richTextValues[r][c] = SpreadsheetApp.newRichTextValue().setText(text).build();
       }
@@ -353,18 +378,15 @@ function processProject(cycleNumber, projectData, sheet, row_index, projectColum
     .setFontColors(fontColors)
     .setFontWeights(fontWeights)
     .setHorizontalAlignments(alignments)
-    .setRichTextValues(richTextValues); // This will now work correctly
+    .setRichTextValues(richTextValues);
 
-  const end = new Date();
-  const executionTime = end - start;
-  Logger.log(`processProject execution time: ${executionTime} ms`);
+  Logger.log(`processProject execution time: ${Date.now() - start} ms`);
 
   return row_index + currentRow;
 }
 
 function getProjectIssuesInHierarchy(projectFilters, cycleNumber) {
   let data;
-  let itemsCount = 0;
 
   if (cycleNumber in raw_data_cache && raw_data_cache[cycleNumber].length > 0) {
     data = raw_data_cache[cycleNumber];
@@ -376,17 +398,21 @@ function getProjectIssuesInHierarchy(projectFilters, cycleNumber) {
     raw_data_cache[cycleNumber] = data;
   }
 
-  const projectMap = new Map();
-  for (let i = 1; i < data.length; i++) {
-    const row = data[i];
-    const projectKey = row[0];
-    if (!projectMap.has(projectKey)) {
-      projectMap.set(projectKey, []);
+  let projectMap = project_map_cache[cycleNumber];
+  if (!projectMap) {
+    projectMap = new Map();
+    for (let i = 1; i < data.length; i++) {
+      const row = data[i];
+      const projectKey = row[0];
+      if (!projectMap.has(projectKey)) projectMap.set(projectKey, []);
+      projectMap.get(projectKey).push(row);
     }
-    projectMap.get(projectKey).push(row);
+    project_map_cache[cycleNumber] = projectMap;
   }
 
   let hierarchy = {};
+  let itemsCount = 0;
+  let latestUpdated = null;
 
   projectFilters.forEach(projectFilter => {
     Logger.log(`Processing the data for project: ${projectFilter.projectKey}. Components: ${projectFilter.components} Excluded Components: ${projectFilter.excludedComponents} Labels: ${projectFilter.labels} Teams: ${projectFilter.teams} Excluded Teams: ${projectFilter.excludedTeams}`);
@@ -441,6 +467,18 @@ function getProjectIssuesInHierarchy(projectFilters, cycleNumber) {
         if (teamExcluded) continue;
       }
 
+      const updatedCell = row[14];
+      let updatedDate = null;
+      if (updatedCell instanceof Date) {
+        updatedDate = updatedCell;
+      } else if (updatedCell) {
+        const d = new Date(updatedCell);
+        if (!isNaN(d.getTime())) updatedDate = d;
+      }
+      if (updatedDate && (!latestUpdated || updatedDate > latestUpdated)) {
+        latestUpdated = updatedDate;
+      }
+
       let parentSummary = row[8];
       let parentKey = row[7];
       let parentLink = row[10];
@@ -477,7 +515,8 @@ function getProjectIssuesInHierarchy(projectFilters, cycleNumber) {
 
   return {
     hierarchy: hierarchy,
-    count: itemsCount
+    count: itemsCount,
+    latestUpdated: latestUpdated
   };
 }
 
@@ -541,7 +580,7 @@ function backupBeforeRun(ss, backupFolderID) {
   DriveApp.getFileById(ss.getId()).makeCopy(name, folder);
 
   Logger.log(`Pre-run backup created: ${name}`);
-  Logger.log(`backupBeforeRun_ time: ${Date.now() - start} ms`);
+  Logger.log(`backupBeforeRun execution time: ${Date.now() - start} ms`);
 }
 
 function parseProjectFilterValue(value) {
@@ -664,7 +703,9 @@ function generateIndexSheet(ss) {
 
   for (const sheetName of indexHeaderValues) {
     if (!sheetName) continue;
-    const targetSheet = ss.getSheetByName(sheetName.toString().toLowerCase() + "_temp");
+    let targetSheet = ss.getSheetByName(sheetName.toString().toLowerCase() + "_temp");
+    if (!targetSheet)
+      targetSheet = ss.getSheetByName(sheetName.toString().toLowerCase());
     if (targetSheet) {
       const lastCol = targetSheet.getLastColumn();
       if (lastCol > 0) {
@@ -704,7 +745,11 @@ function generateIndexSheet(ss) {
 
       for (let j = 0; j < teamNames.length; j++) {
         if (teamNames[j] && projectKeys[j]) {
-          const rangeA1 = ss.getSheetByName(sheetName + "_temp").getRange(1, Math.max(1, j - 1), 1, 3).getA1Notation();
+          let targetSheet = ss.getSheetByName(sheetName + "_temp")
+          if (!targetSheet)
+            targetSheet = ss.getSheetByName(sheetName)
+
+          const rangeA1 = targetSheet.getRange(1, Math.max(1, j - 1), 1, 3).getA1Notation();
           const url = `${ss.getUrl()}#gid=${data.id}&range=${rangeA1}`;
           const richText = SpreadsheetApp.newRichTextValue()
             .setText(teamNames[j].toString())

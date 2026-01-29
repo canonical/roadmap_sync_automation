@@ -110,7 +110,8 @@ function main() {
         issue.fields.parent ? jiraBaseUrl + '/browse/' + issue.fields.parent.key : "",
         issue.fields.customfield_10019 ? issue.fields.customfield_10019 : "",
         issue.fields.parent ? parentRanks.get(issue.fields.parent.key) : "",
-        issue.fields.customfield_10001 ? issue.fields.customfield_10001.name : ""
+        issue.fields.customfield_10001 ? issue.fields.customfield_10001.name : "",
+        (issue.fields.updated ? new Date(issue.fields.updated) : "")
       ];
     });
 
@@ -146,7 +147,7 @@ function main() {
     dataSheet.clear(); // Clear previous data
 
     // Define headers and write them to the sheet
-    const headers = ["Project Key", "Epic Key", "Summary", "Current Status", "Roadmap State", "Labels", "Components", "Parent Key", "Parent Summary", "Epic Link", "Parent Link", "Issue Rank", "Parent Rank", "Team"];
+    const headers = ["Project Key", "Epic Key", "Summary", "Current Status", "Roadmap State", "Labels", "Components", "Parent Key", "Parent Summary", "Epic Link", "Parent Link", "Issue Rank", "Parent Rank", "Team", "Updated"];
     dataSheet.appendRow(headers);
 
     // Write all data at once for better performance
@@ -209,20 +210,21 @@ function getComponentsString(components) {
 
 function prepareJsonData(allData) {
   return allData.map(row => ({
-    project: row[0],          // Project Key
-    key: row[1],              // Epic Key
-    summary: row[2],          // Summary
-    status: row[3],           // Current Status
-    roadmapState: row[4],     // Roadmap State
-    labels: row[5],           // Labels
-    components: row[6],       // Components
-    parentKey: row[7],        // Parent Key
-    parentSummary: row[8],    // Parent Summary
-    epicLink: row[9],         // Epic Link
-    parentLink: row[10],      // Parent Link
-    issueRank: row[11],       // Issue Rank
-    parentRank: row[12],      // Parent Rank
-    team: row[13]             // Team
+    project: row[0],
+    key: row[1],
+    summary: row[2],
+    status: row[3],
+    roadmapState: row[4],
+    labels: row[5],
+    components: row[6],
+    parentKey: row[7],
+    parentSummary: row[8],
+    epicLink: row[9],
+    parentLink: row[10],
+    issueRank: row[11],
+    parentRank: row[12],
+    team: row[13],
+    updated: row[14]
   }));
 }
 
@@ -269,7 +271,8 @@ function fetchAllIssuesByJql_(jiraBaseUrl, jiraEmail, jiraToken, jql) {
         "parent",
         "components",
         RANK_FIELD_ID,
-        TEAM_FIELD_ID
+        TEAM_FIELD_ID,
+        "updated"
       ]
     };
 
