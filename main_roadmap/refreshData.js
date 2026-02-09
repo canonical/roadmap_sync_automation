@@ -132,7 +132,10 @@ function processSheet(ss, sheet, cycleNumber, withColorUpdate, lastExecutionTime
     cycles = findCyclesOnTheSheet(tempSheet);
   }
 
-  const lastExecutionDate = lastExecutionTime ? new Date(lastExecutionTime) : null;
+  // shift last_execution backwards to avoid skipping updates made during the previous run
+  const lastExecutionDate = lastExecutionTime
+    ? new Date(new Date(lastExecutionTime).getTime() - 60 * 60 * 1000)
+    : null;
 
   if (cycles.has(cycleNumber)) {
 
@@ -784,7 +787,7 @@ function generateIndexSheet(ss) {
   const lastRow = 17;
   const lastExecutionDate = new Date();
   const infoText = `Updated every: ${EXECUTION_FREQUENCY_IN_HOURS} hours | Last updated on: ${lastExecutionDate.toISOString()} (UTC) | Link to documentation: PR030 | Contact: JIRA`;
-  //const infoText = `Updated during breaks and lunch | Last updated on: ${lastExecutionDate.toISOString()} (UTC) | Link to documentation: PR030 | Contact: JIRA`;
+  //const infoText = `Updated during breaks and overnight | Last updated on: ${lastExecutionDate.toISOString()} (UTC) | Link to documentation: PR030 | Contact: JIRA`;
   const richTextBuilder = SpreadsheetApp.newRichTextValue().setText(infoText);
 
   const docLinkText = "PR030";
